@@ -54,6 +54,21 @@ export interface FixtureRegistryEntry {
  * - `peoples-treasures` — HABTM join table, no model class
  * - `randomly-named-a9` — ambiguous — model uses table randomly_named_table1, not this set
  * - `virtual-columns` — no canonical VirtualColumn model
+ *
+ * Additional gaps — model imports, but the fixture set does NOT seed against the
+ * canonical `TEST_SCHEMA` today (verified by the seed-conformance test). Grouped by
+ * the underlying loader gap; each is re-addable once that gap closes:
+ * - NOT NULL `created_at`/`updated_at` (no fixture auto-stamp yet): `cars`, `people`, `toys`
+ * - string / non-integer declared PK (`resolveDeclaredPk` integer-only): `dashboards`,
+ *   `minivans`, `speedometers`, `string-key-objects`, `subscribers`
+ * - id-less or custom-PK table while the model defaults to `id`: `bulbs` (PK `ID`),
+ *   `edges`, `mateys`, `mixed-case-monkeys` (PK `monkeyID`), `cpk-order-tags`
+ * - composite-PK column NOT NULL (`cpk_books.author_id`): `cpk-books`
+ * - STI `type` row whose subclass isn't loaded by a standalone `useFixtures([set])`:
+ *   `parrots` (LiveParrot), `vegetables` (Cucumber)
+ * - fixture references a non-column (HABTM assoc name): `developers` (`shared_computers`)
+ * - table absent from the canonical SQLite `TEST_SCHEMA`: `uuid-children`, `uuid-parents`,
+ *   `vertices`
  */
 export const fixtureRegistry = {
   accounts: {
@@ -84,17 +99,9 @@ export const fixtureRegistry = {
     model: () => import("./models/book.js").then((m) => m.Book),
     data: FixtureData.bookFixtureData,
   },
-  bulbs: {
-    model: () => import("./models/bulb.js").then((m) => m.Bulb),
-    data: FixtureData.bulbFixtureData,
-  },
   cakeDesigners: {
     model: () => import("./models/cake-designer.js").then((m) => m.CakeDesigner),
     data: FixtureData.cakeDesignerFixtureData,
-  },
-  cars: {
-    model: () => import("./models/car.js").then((m) => m.Car),
-    data: FixtureData.carFixtureData,
   },
   categories: {
     model: () => import("./models/category.js").then((m) => m.Category),
@@ -152,17 +159,9 @@ export const fixtureRegistry = {
     model: () => import("./models/cpk.js").then((m) => m.CpkAuthor),
     data: FixtureData.cpkAuthorFixtureData,
   },
-  cpkBooks: {
-    model: () => import("./models/cpk.js").then((m) => m.CpkBook),
-    data: FixtureData.cpkBookFixtureData,
-  },
   cpkOrderAgreements: {
     model: () => import("./models/cpk.js").then((m) => m.CpkOrderAgreement),
     data: FixtureData.cpkOrderAgreementFixtureData,
-  },
-  cpkOrderTags: {
-    model: () => import("./models/cpk.js").then((m) => m.CpkOrderTag),
-    data: FixtureData.cpkOrderTagFixtureData,
   },
   cpkReviews: {
     model: () => import("./models/cpk.js").then((m) => m.CpkReview),
@@ -176,17 +175,9 @@ export const fixtureRegistry = {
     model: () => import("./models/customer.js").then((m) => m.Customer),
     data: FixtureData.customerFixtureData,
   },
-  dashboards: {
-    model: () => import("./models/dashboard.js").then((m) => m.Dashboard),
-    data: FixtureData.dashboardFixtureData,
-  },
   deadParrots: {
     model: () => import("./models/parrot.js").then((m) => m.DeadParrot),
     data: FixtureData.deadParrotFixtureData,
-  },
-  developers: {
-    model: () => import("./models/developer.js").then((m) => m.Developer),
-    data: FixtureData.developerFixtureData,
   },
   dogLovers: {
     model: () => import("./models/dog-lover.js").then((m) => m.DogLover),
@@ -203,10 +194,6 @@ export const fixtureRegistry = {
   drinkDesigners: {
     model: () => import("./models/drink-designer.js").then((m) => m.DrinkDesigner),
     data: FixtureData.drinkDesignerFixtureData,
-  },
-  edges: {
-    model: () => import("./models/edge.js").then((m) => m.Edge),
-    data: FixtureData.edgeFixtureData,
   },
   entrants: {
     model: () => import("./models/entrant.js").then((m) => m.Entrant),
@@ -252,10 +239,6 @@ export const fixtureRegistry = {
     model: () => import("./models/parrot.js").then((m) => m.LiveParrot),
     data: FixtureData.liveParrotFixtureData,
   },
-  mateys: {
-    model: () => import("./models/matey.js").then((m) => m.Matey),
-    data: FixtureData.mateyFixtureData,
-  },
   memberDetails: {
     model: () => import("./models/member-detail.js").then((m) => m.MemberDetail),
     data: FixtureData.memberDetailFixtureData,
@@ -275,14 +258,6 @@ export const fixtureRegistry = {
   minimalistics: {
     model: () => import("./models/minimalistic.js").then((m) => m.Minimalistic),
     data: FixtureData.minimalisticFixtureData,
-  },
-  minivans: {
-    model: () => import("./models/minivan.js").then((m) => m.Minivan),
-    data: FixtureData.minivanFixtureData,
-  },
-  mixedCaseMonkeys: {
-    model: () => import("./models/mixed-case-monkey.js").then((m) => m.MixedCaseMonkey),
-    data: FixtureData.mixedCaseMonkeyFixtureData,
   },
   movies: {
     model: () => import("./models/movie.js").then((m) => m.Movie),
@@ -311,14 +286,6 @@ export const fixtureRegistry = {
   paragraphs: {
     model: () => import("./models/paragraph.js").then((m) => m.Paragraph),
     data: FixtureData.paragraphFixtureData,
-  },
-  parrots: {
-    model: () => import("./models/parrot.js").then((m) => m.Parrot),
-    data: FixtureData.parrotFixtureData,
-  },
-  people: {
-    model: () => import("./models/person.js").then((m) => m.Person),
-    data: FixtureData.personFixtureData,
   },
   pets: {
     model: () => import("./models/pet.js").then((m) => m.Pet),
@@ -380,10 +347,6 @@ export const fixtureRegistry = {
     model: () => import("./models/ship.js").then((m) => m.Ship),
     data: FixtureData.shipFixtureData,
   },
-  speedometers: {
-    model: () => import("./models/speedometer.js").then((m) => m.Speedometer),
-    data: FixtureData.speedometerFixtureData,
-  },
   sponsors: {
     model: () => import("./models/sponsor.js").then((m) => m.Sponsor),
     data: FixtureData.sponsorFixtureData,
@@ -391,14 +354,6 @@ export const fixtureRegistry = {
   strictZines: {
     model: () => import("./models/strict-zine.js").then((m) => m.StrictZine),
     data: FixtureData.strictZineFixtureData,
-  },
-  stringKeyObjects: {
-    model: () => import("./models/string-key-object.js").then((m) => m.StringKeyObject),
-    data: FixtureData.stringKeyObjectFixtureData,
-  },
-  subscribers: {
-    model: () => import("./models/subscriber.js").then((m) => m.Subscriber),
-    data: FixtureData.subscriberFixtureData,
   },
   subscriptions: {
     model: () => import("./models/subscription.js").then((m) => m.Subscription),
@@ -420,10 +375,6 @@ export const fixtureRegistry = {
     model: () => import("./models/topic.js").then((m) => m.Topic),
     data: FixtureData.topicFixtureData,
   },
-  toys: {
-    model: () => import("./models/toy.js").then((m) => m.Toy),
-    data: FixtureData.toyFixtureData,
-  },
   trafficLights: {
     model: () => import("./models/traffic-light.js").then((m) => m.TrafficLight),
     data: FixtureData.trafficLightFixtureData,
@@ -436,25 +387,9 @@ export const fixtureRegistry = {
     model: () => import("./models/tree.js").then((m) => m.Tree),
     data: FixtureData.treeFixtureData,
   },
-  uuidChildren: {
-    model: () => import("./models/uuid-child.js").then((m) => m.UuidChild),
-    data: FixtureData.uuidChildFixtureData,
-  },
-  uuidParents: {
-    model: () => import("./models/uuid-parent.js").then((m) => m.UuidParent),
-    data: FixtureData.uuidParentFixtureData,
-  },
   variants: {
     model: () => import("./models/shop.js").then((m) => m.ShopVariant),
     data: FixtureData.variantFixtureData,
-  },
-  vegetables: {
-    model: () => import("./models/vegetables.js").then((m) => m.Vegetable),
-    data: FixtureData.vegetableFixtureData,
-  },
-  vertices: {
-    model: () => import("./models/vertex.js").then((m) => m.Vertex),
-    data: FixtureData.vertexFixtureData,
   },
   warehouseThings: {
     model: () => import("./models/warehouse-thing.js").then((m) => m.WarehouseThing),

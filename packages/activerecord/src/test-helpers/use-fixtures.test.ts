@@ -4,7 +4,7 @@ import { fixtureRegistry } from "./fixtures-registry.js";
 import { FixtureSet } from "./fixture-set.js";
 import { Base } from "../base.js";
 import "../relation.js"; // registers the Relation ctor so Model.findBy/.all/.count work
-import { fixtureId } from "./define-fixtures.js";
+import { fixtureId, defineFixtures } from "./define-fixtures.js";
 import { defineSchema } from "./define-schema.js";
 import { createTestAdapter } from "../test-adapter.js";
 import { setupHandlerSuite } from "./setup-handler-suite.js";
@@ -244,6 +244,37 @@ describe("fixtureRegistry conformance", () => {
       }
     }
   });
+});
+
+// Seed-level conformance: the structural checks above can't see whether the
+// model's primary key matches the *schema* table (id-less tables, custom-PK
+// columns like `ID`/`monkeyID`, NOT NULL timestamps, composite schema PKs).
+// The only authoritative check is to actually seed each entry against the
+// canonical TEST_SCHEMA — exactly what the name-based API does at runtime. An
+// entry that can't seed must move to the registry's gap list, not stay exposed.
+describe("fixtureRegistry seeds against TEST_SCHEMA", () => {
+  setupHandlerSuite();
+  useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema(TEST_SCHEMA);
+  });
+
+  it("every registered entry seeds without error", async () => {
+    const failures: string[] = [];
+    for (const [name, entry] of Object.entries(fixtureRegistry)) {
+      try {
+        const ModelClass = await (entry as { model: () => Promise<typeof Base> }).model();
+        await defineFixtures(
+          Base.adapter,
+          ModelClass,
+          (entry as { data: Record<string, Record<string, unknown>> }).data,
+        );
+      } catch (e) {
+        failures.push(`${name}: ${(e as Error).message.split("\n")[0]}`);
+      }
+    }
+    expect(failures, `unseedable registry entries:\n${failures.join("\n")}`).toEqual([]);
+  }, 120000);
 });
 
 // --- FixtureSet.createFixtures ---

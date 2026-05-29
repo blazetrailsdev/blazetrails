@@ -29,9 +29,10 @@
  * SQLite only. PG/MariaDB are out of scope for the spike — their phases land
  * separately and keep the current per-worker preload until then.
  *
- * Hard rule: no `node:*` / `process.*` fs APIs — all filesystem access goes
- * through the activesupport fs-adapter. `process.env` reads are allowed (the
- * env carries the handoff from globalSetup to forked workers).
+ * Hard rule: no `node:*` fs APIs — all filesystem access goes through the
+ * activesupport fs-adapter. `process` is used only for runtime plumbing, not
+ * fs: `process.env` reads carry the globalSetup → forked-worker handoff, and
+ * `process.on("exit")` registers best-effort cleanup of the worker clone.
  */
 import type { FsAdapter } from "@blazetrails/activesupport/fs-adapter";
 import { getFsAsync, getPathAsync } from "@blazetrails/activesupport/fs-adapter";

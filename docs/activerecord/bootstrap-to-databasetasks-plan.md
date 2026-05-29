@@ -59,9 +59,21 @@ So the migration is three distinct swaps, not one:
 - **Generation timing: runtime, once per worker.** `test-setup-dy.ts`
   generates the file to a temp path at worker startup from `TEST_SCHEMA`, then
   `loadSchema` reads it. No checked-in artifact, always in sync.
-- **PG/MySQL workers: full `reconstructFromSchema`** (purge + create +
-  loadSchema) per worker — matches Rails `db:test:prepare` exactly,
-  self-healing. (For sqlite `:memory:`, purge/create are effectively no-ops.)
+- **PG/MySQL workers: `reconstructFromSchema`** per worker, self-healing.
+  (For sqlite `:memory:`, purge/create are effectively no-ops.)
+  **Rails-fidelity caveat (verified against `vendor/rails`):** Rails'
+  `reconstruct_from_schema` (`database_tasks.rb:413-425`) is NOT a plain
+  purge+load. It runs inside `with_temporary_pool(clobber: true)` and:
+  - if `schema_up_to_date?` → `truncate_tables` (unless
+    `SKIP_TEST_DATABASE_TRUNCATE`) — the common warm-DB path;
+  - else → `purge` + `load_schema`;
+  - rescue `NoDatabaseError` → `create` + `load_schema`.
+    The current trails `reconstructFromSchema` (`database-tasks.ts:1016`)
+    implements NEITHER the `schema_up_to_date?` check NOR the `truncate_tables`
+    fast-path — it unconditionally purges+loads. Adopting it as-is diverges
+    from Rails (slower; reloads schema every worker every run). **PR 2 (or a
+    prerequisite) must bring `reconstructFromSchema` to parity — add
+    `schema_up_to_date?` + `truncate_tables` fast-path — before relying on it.**
 - **Visitor sync: fold into `establishConnection`.** Establishing the
   connection installs the matching Arel visitor; `test-setup.ts` must stop
   resetting it out from under the handler. Removes the `beforeEach`
@@ -90,10 +102,35 @@ sqlite-memory (moving the env-sniff out of bootstrap). Wire
 `DatabaseTasks.databaseConfiguration` + `setAdapter`.
 
 **Phase 2 — rework `test-setup-dy.ts`.** Establish Base from the Phase-1
-config, then `DatabaseTasks.reconstructFromSchema(config)` (or bare
-`loadSchema`) using the Phase-0 file. Preserve `setCanonicalSchemaPreload`
-so per-file `defineSchema` calls remain cache-hit no-ops during transition.
-Re-verify the SQLite `:memory: pool:1` loadSchema deadlock workaround.
+config, then load the schema via `DatabaseTasks` using the Phase-0 file —
+see the parity note below for which entry point per driver. Preserve
+`setCanonicalSchemaPreload` so per-file `defineSchema` calls remain cache-hit
+no-ops during transition. Re-verify the SQLite `:memory: pool:1` loadSchema
+deadlock workaround.
+
+> **Which DatabaseTasks entry point? (verified against `vendor/rails`)**
+> Rails' _AR test suite itself_ does NOT use `reconstruct_from_schema` /
+> `db:test:prepare`. `activerecord/test/support/load_schema_helper.rb:12`
+> just does `load SCHEMA_ROOT + "/schema.rb"` — a direct load of the
+> hand-authored `test/schema/schema.rb` into the connection.
+> `reconstruct_from_schema` (via `TestDatabases.create_and_load_schema`,
+> `test_databases.rb:17`) is the _parallelized-app-DB_ path, used for
+> persistent per-worker DBs that need purge/truncate between runs.
+>
+> Mapping to trails:
+>
+> - **sqlite `:memory:`** — re-establishing the connection already yields a
+>   fresh DB, so `DatabaseTasks.loadSchema` alone is the faithful analog of
+>   `load_schema_helper` (no purge/truncate needed). This is also the
+>   driver where the D-0 deadlock lives, so the simpler path is safer.
+> - **PG/MySQL persistent per-worker DBs** — `reconstructFromSchema` (with
+>   the truncate fast-path it currently lacks) is the right analog of the
+>   `TestDatabases` path.
+>
+> So Phase 2 should gate on the driver: `loadSchema` for memory/clobbered
+> connections, `reconstructFromSchema` for persistent DBs. This also
+> resolves the purge-handler open question (see below) — memory needs no
+> purge handler at all.
 
 **Phase 3 — rewrite `setupHandlerSuite()` internals.** Single-file change:
 call the new establish-from-config helper instead of `bootstrapTestHandler`;
@@ -133,11 +170,32 @@ signature machinery in `define-schema.ts` once everything loads via
   2. Permanent: a worker-startup assertion that key `TEST_SCHEMA` tables
      exist after `loadSchema`, before any test runs.
 
-## Open questions (remaining)
+## Resolved (decisions for PR 1/2)
 
-- Exact temp-path/format for the runtime-generated schema file (one per
-  worker — must not collide across parallel forks; key off the worker id /
-  `AR_DB_FORKS` slot).
-- Does `reconstructFromSchema`'s `purge` need a registered task handler for
-  every adapter in the test matrix, or is the sqlite no-op path enough for
-  PR 2's first cut?
+- **Temp path:** one file per worker keyed off vitest's
+  `process.env.VITEST_POOL_ID` (worker slot, present under default config):
+  `path.join(os.tmpdir(), \`trails-schema-${VITEST_POOL_ID}.ts\`)`. Permits
+`node:os`in test-only infra; a deterministic in-cwd`tmp/`is the
+fallback if`node:os` is unwanted.
+- **Purge handlers:** PR 2's first cut ships without PG/MySQL purge handlers
+  by gating on "driver supports purge" — sqlite `:memory:` purge is a no-op
+  (re-establish drops the DB), so memory uses `loadSchema` alone (see the
+  Phase 2 parity note). Persistent PG/MySQL purge handlers land as a
+  follow-up PR. Not full parity, but incremental.
+
+## Source-of-truth (Phase 5 framing — verified against `vendor/rails`)
+
+`TEST_SCHEMA` (in-memory TS) is the **long-term source of truth**; the
+generated schema file is **ephemeral runtime output** (glue to feed
+`DatabaseTasks.loadSchema`, which wants a file). This matches Rails: the AR
+test suite's source of truth is the hand-authored, committed
+`activerecord/test/schema/schema.rb` (`ActiveRecord::Schema.define do ...`),
+loaded directly by `load_schema_helper`. `test-schema.ts` is the direct
+mirror of that file (same table ordering, same `1_need_quoting`/`accounts`
+head).
+
+A checked-in `db/schema.ts` dump would be **less** faithful, not more — that
+artifact belongs to an _application's_ `db:test:prepare` flow, not the AR
+_test suite_. So Phase 5 does NOT introduce a committed schema dump; it only
+removes the now-redundant canonical-preload signature machinery in
+`define-schema.ts`.

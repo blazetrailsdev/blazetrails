@@ -4905,6 +4905,17 @@ describe("EagerAssociationTest", () => {
     await expect(essays.eagerLoad("writer").toArray()).rejects.toThrow(EagerLoadPolymorphicError);
     await expect(essays.eagerLoad("writer").count()).rejects.toThrow(EagerLoadPolymorphicError);
     await expect(essays.eagerLoad("writer").exists()).rejects.toThrow(EagerLoadPolymorphicError);
+    // Rails routes every calculation through apply_join_dependency when eager
+    // loading, so sum/minimum (single aggregate) and grouped aggregates raise too.
+    await expect(essays.eagerLoad("writer").sum("writer_id")).rejects.toThrow(
+      EagerLoadPolymorphicError,
+    );
+    await expect(essays.eagerLoad("writer").minimum("writer_id")).rejects.toThrow(
+      EagerLoadPolymorphicError,
+    );
+    await expect(essays.eagerLoad("writer").group("writer_type").sum("writer_id")).rejects.toThrow(
+      EagerLoadPolymorphicError,
+    );
     // Rails `exists?` short-circuits on a falsey condition before the
     // eager_loading? raise (finder_methods.rb:367-369).
     expect(await essays.eagerLoad("writer").exists(false)).toBe(false);

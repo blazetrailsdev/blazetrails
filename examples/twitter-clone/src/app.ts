@@ -1,5 +1,5 @@
 import express, { type Request, type Response, type NextFunction } from "express";
-import { RecordInvalid, RecordNotFound } from "@blazetrails/activerecord";
+import { RecordInvalid, RecordNotFound, RecordNotUnique } from "@blazetrails/activerecord";
 import { User, Tweet, Follow, Like } from "./models/index.js";
 
 /**
@@ -122,6 +122,12 @@ export function buildApp() {
     }
     if (err instanceof RecordInvalid) {
       return res.status(422).json({ error: err.message });
+    }
+    // A concurrent insert can lose the unique-index race after the app-level
+    // uniqueness check passes; the DB raises RecordNotUnique. That's a client
+    // conflict (duplicate), not an internal error.
+    if (err instanceof RecordNotUnique) {
+      return res.status(409).json({ error: err.message });
     }
     // Preserve client-error statuses — e.g. `express.json()` throws a 400 with
     // `status`/`statusCode` set on malformed JSON — instead of masking them as 500.

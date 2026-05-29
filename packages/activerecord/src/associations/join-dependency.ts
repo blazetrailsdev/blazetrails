@@ -373,9 +373,17 @@ export class JoinDependency {
    */
   addAssociationSpec(spec: AssociationSpec): boolean {
     const snapshot = this._snapshotTree();
-    if (!this._walkSpec(spec, this._baseModel, this._baseAlias, "")) {
+    try {
+      if (!this._walkSpec(spec, this._baseModel, this._baseAlias, "")) {
+        this._restoreTree(snapshot);
+        return false;
+      }
+    } catch (e) {
+      // addAssociation mutates _nextTableIndex/aliasTracker before the
+      // polymorphic check throws. Restore so the instance is left unchanged
+      // (all-or-nothing) before propagating EagerLoadPolymorphicError.
       this._restoreTree(snapshot);
-      return false;
+      throw e;
     }
     return true;
   }

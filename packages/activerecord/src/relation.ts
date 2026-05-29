@@ -2242,12 +2242,7 @@ export class Relation<T extends Base> {
   private async _executeEagerLoad(eagerAssocs?: AssociationSpec[]): Promise<void> {
     const eagerAssociations = eagerAssocs ?? this._eagerLoadAssociations;
     const basePk = (this._modelClass as any).primaryKey ?? "id";
-    if (
-      Array.isArray(basePk) ||
-      this._ctes.length > 0 ||
-      this._setOperation ||
-      !this._fromClause.isEmpty()
-    ) {
+    if (this._eagerLoadBypassesJoinDependency()) {
       const sql = this._toSql();
       const result = await this._modelClass.connection.selectAll(sql, "Eager Load");
       this._records = this._instrumentInstantiation(result.toArray());
@@ -2568,12 +2563,37 @@ export class Relation<T extends Base> {
   // interface merge + prototype assignment (see bottom of file)
 
   /**
+   * Whether an eager-load query degrades to plain SQL + preloading instead of
+   * building a JoinDependency. trails can't emit the aliased eager JOIN under a
+   * composite PK, CTEs, a set operation, or a FROM override, so eager specs are
+   * preloaded in those cases (a capability gap — Rails always JOINs). Kept in
+   * one place so the `toArray` builder (`_executeEagerLoad`), the `toSql`
+   * builder (`_buildEagerSql`), and the calculation/exists raise-check
+   * (`_checkEagerLoadable`) agree on exactly when a JoinDependency is built.
+   * @internal
+   */
+  private _eagerLoadBypassesJoinDependency(): boolean {
+    const basePk = (this._modelClass as any).primaryKey ?? "id";
+    return (
+      Array.isArray(basePk) ||
+      this._ctes.length > 0 ||
+      !!this._setOperation ||
+      !this._fromClause.isEmpty()
+    );
+  }
+
+  /**
    * Surface raise-worthy eager-load specs (polymorphic) before building
    * calculation/exists SQL, which never constructs a JoinDependency of its own.
    * Mirrors Rails `apply_join_dependency`, which `count`/`exists?`/`calculate`
    * route through over `eager_load_values | includes_values` and which raises
    * for polymorphic associations. Capability-gap specs (CPK, unjoinable through)
    * return false from addAssociationSpec and don't raise.
+   *
+   * Skips entirely when the query bypasses the JoinDependency (CTEs, set ops,
+   * FROM overrides, composite PK): there `toArray` degrades to preloading
+   * without raising, so the calculation/exists paths must stay consistent and
+   * not raise either.
    *
    * Only the calculation/exists entry points call this — the `toArray` eager
    * path builds its real JoinDependency in `_executeEagerLoad`/`_buildEagerSql`,
@@ -2586,12 +2606,11 @@ export class Relation<T extends Base> {
    * @internal
    */
   _checkEagerLoadable(): void {
+    if (this._eagerLoadBypassesJoinDependency()) return;
     const specs = [
       ...new Set([...this._eagerLoadAssociations, ...this._includesToPromoteFromReferences()]),
     ];
     if (specs.length === 0) return;
-    const basePk = (this._modelClass as any).primaryKey ?? "id";
-    if (Array.isArray(basePk)) return;
     const jd = new JoinDependency(this._modelClass);
     for (const spec of specs) jd.addAssociationSpec(spec);
   }
@@ -3624,7 +3643,7 @@ export class Relation<T extends Base> {
   // JoinDependency SQL synchronously for toSql()/parity runner use.
   // Returns null if no eager associations could be joined (fall back to plain SQL).
   private _buildEagerSql(): string | null {
-    if (this._setOperation || !this._fromClause.isEmpty() || this._ctes.length > 0) return null;
+    if (this._eagerLoadBypassesJoinDependency()) return null;
 
     const allEager = [
       ...new Set([...this._eagerLoadAssociations, ...this._includesToPromoteFromReferences()]),
@@ -3632,7 +3651,6 @@ export class Relation<T extends Base> {
     if (allEager.length === 0) return null;
 
     const basePk = (this._modelClass as any).primaryKey ?? "id";
-    if (Array.isArray(basePk)) return null;
 
     const jd = new JoinDependency(this._modelClass);
     this._addEagerSpecsToJoinDependency(jd, allEager);

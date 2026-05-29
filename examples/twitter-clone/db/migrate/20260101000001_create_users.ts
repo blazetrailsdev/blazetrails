@@ -9,7 +9,7 @@ export default class CreateUsers extends Migration {
       t.timestamps();
       // Back the model's `validatesUniqueness("handle")` with a DB-level
       // guarantee so concurrent creates can't race in duplicate handles.
-      t.index("handle", { unique: true });
+      t.index(["handle"], { unique: true });
     });
   }
 }

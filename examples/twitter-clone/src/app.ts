@@ -125,7 +125,8 @@ export function buildApp() {
     }
     // Preserve client-error statuses — e.g. `express.json()` throws a 400 with
     // `status`/`statusCode` set on malformed JSON — instead of masking them as 500.
-    const status = (err as { status?: number; statusCode?: number }).status ??
+    const status =
+      (err as { status?: number; statusCode?: number }).status ??
       (err as { statusCode?: number }).statusCode;
     if (typeof status === "number" && status >= 400 && status < 500) {
       return res.status(status).json({ error: (err as Error).message });

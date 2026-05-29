@@ -102,8 +102,10 @@ describe("WhereChainTest", () => {
     await WcAuthor.create({ name: "A1" });
     const reader = await WcAuthor.create({ name: "A2" });
     const other = await WcAuthor.create({ name: "A3" });
-    // A reading book (enum-cast last_read = 2) belonging to `reader`, plus a
-    // non-reading book on another author to prove the scope filters.
+    // `reader` owns a reading book (last_read = 2); `other` owns a non-reading
+    // book. The enum cast under test isn't this raw insert — it's the
+    // `reading()` scope (last_read: :reading → 2) folded into the JOIN ON,
+    // which is what filters `other` out of where.associated(:readingListing).
     await WcBook.create({ name: "RR", last_read: 2, wc_author_id: (reader as any).id });
     await WcBook.create({ name: "UR", last_read: 0, wc_author_id: (other as any).id });
     return (reader as any).id;

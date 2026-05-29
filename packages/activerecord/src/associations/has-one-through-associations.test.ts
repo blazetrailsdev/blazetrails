@@ -16,7 +16,11 @@ import {
   HasOneThroughCantAssociateThroughCollection,
   HasOneAssociationPolymorphicThroughError,
 } from "./errors.js";
-import { assertQueriesMatch } from "../testing/query-assertions.js";
+import {
+  assertQueriesMatch,
+  assertQueriesCount,
+  assertNoQueries,
+} from "../testing/query-assertions.js";
 import { defineSchema, type Schema } from "../test-helpers/define-schema.js";
 
 const TEST_SCHEMA = {
@@ -469,22 +473,27 @@ describe("HasOneThroughAssociationsTest", () => {
       favorite: true,
     });
 
-    // conditions on the through table
-    let loaded = await CeMember.all().eagerLoad("favoriteClub").toArray();
+    // conditions on the through table — includes().references() promotes the
+    // scoped has_one :through to a JOIN-based eager load (Rails' includes auto-
+    // promotes when the scope references the joined tables).
+    let loaded = await CeMember.all()
+      .includes("favoriteClub")
+      .references("ce_memberships")
+      .toArray();
     expect((loaded[0] as any).association("favoriteClub").target?.name).toBe(
       "Moustache and Eyebrow Fancier Club",
     );
     await membership.update({ favorite: false });
-    loaded = await CeMember.all().eagerLoad("favoriteClub").toArray();
+    loaded = await CeMember.all().includes("favoriteClub").references("ce_memberships").toArray();
     expect((loaded[0] as any).association("favoriteClub").target).toBeNull();
 
     // conditions on the source table
-    loaded = await CeMember.all().eagerLoad("hairyClub").toArray();
+    loaded = await CeMember.all().includes("hairyClub").references("ce_clubs").toArray();
     expect((loaded[0] as any).association("hairyClub").target?.name).toBe(
       "Moustache and Eyebrow Fancier Club",
     );
     await club.update({ name: "Association of Clean-Shaven Persons" });
-    loaded = await CeMember.all().eagerLoad("hairyClub").toArray();
+    loaded = await CeMember.all().includes("hairyClub").references("ce_clubs").toArray();
     expect((loaded[0] as any).association("hairyClub").target).toBeNull();
   });
 
@@ -634,16 +643,21 @@ describe("HasOneThroughAssociationsTest", () => {
     const member = await Member.create({ name: "Groucho Marx" });
     await Membership.create({ member_id: member.id, club_id: club.id });
     // order references clubs table → forces JOIN-based (non-preload) eager load
-    const members = await Member.all()
-      .includes("club")
-      .references("clubs")
-      .where({ name: "Groucho Marx" })
-      .order("clubs.name")
-      .toArray();
+    let members: any[] = [];
+    await assertQueriesCount(1, false, async () => {
+      members = await Member.all()
+        .includes("club")
+        .references("clubs")
+        .where({ name: "Groucho Marx" })
+        .order("clubs.name")
+        .toArray();
+    });
     expect(members).toHaveLength(1);
-    const loaded = (members[0] as any).association("club");
-    expect(loaded.isLoaded()).toBe(true);
-    expect(loaded.target?.name).toBe("Eager Club");
+    await assertNoQueries(false, async () => {
+      const loaded = members[0].association("club");
+      expect(loaded.isLoaded()).toBe(true);
+      expect(loaded.target?.name).toBe("Eager Club");
+    });
   });
 
   it("has one through nonpreload eager loading through polymorphic", async () => {
@@ -684,16 +698,21 @@ describe("HasOneThroughAssociationsTest", () => {
       sponsorable_type: "NpMember",
       club_id: club.id,
     });
-    const members = await NpMember.all()
-      .includes("sponsorClub")
-      .references("np_clubs")
-      .where({ name: "Groucho Marx" })
-      .order("np_clubs.name")
-      .toArray();
+    let members: any[] = [];
+    await assertQueriesCount(1, false, async () => {
+      members = await NpMember.all()
+        .includes("sponsorClub")
+        .references("np_clubs")
+        .where({ name: "Groucho Marx" })
+        .order("np_clubs.name")
+        .toArray();
+    });
     expect(members).toHaveLength(1);
-    const loaded = (members[0] as any).association("sponsorClub");
-    expect(loaded.isLoaded()).toBe(true);
-    expect(loaded.target?.name).toBe("Eager Club");
+    await assertNoQueries(false, async () => {
+      const loaded = members[0].association("sponsorClub");
+      expect(loaded.isLoaded()).toBe(true);
+      expect(loaded.target?.name).toBe("Eager Club");
+    });
   });
 
   it("has one through nonpreload eager loading through polymorphic with more than one through record", async () => {
@@ -740,16 +759,21 @@ describe("HasOneThroughAssociationsTest", () => {
       sponsorable_type: "NpmMember",
       club_id: outrageous.id,
     });
-    const members = await NpmMember.all()
-      .includes("sponsorClub")
-      .references("npm_clubs")
-      .where({ name: "Groucho Marx" })
-      .order("npm_clubs.name DESC")
-      .toArray();
+    let members: any[] = [];
+    await assertQueriesCount(1, false, async () => {
+      members = await NpmMember.all()
+        .includes("sponsorClub")
+        .references("npm_clubs")
+        .where({ name: "Groucho Marx" })
+        .order("npm_clubs.name DESC")
+        .toArray();
+    });
     expect(members).toHaveLength(1);
-    const loaded = (members[0] as any).association("sponsorClub");
-    expect(loaded.isLoaded()).toBe(true);
-    expect(loaded.target?.name).toBe("Outrageous Club");
+    await assertNoQueries(false, async () => {
+      const loaded = members[0].association("sponsorClub");
+      expect(loaded.isLoaded()).toBe(true);
+      expect(loaded.target?.name).toBe("Outrageous Club");
+    });
   });
 
   it("uninitialized has one through should return nil for unsaved record", async () => {

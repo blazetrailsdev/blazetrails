@@ -829,22 +829,34 @@ export class AbstractAdapter implements Quoting {
     return this._connection !== null;
   }
 
+  // Returns `void | Promise<void>` rather than `Promise<void>` because some
+  // concrete adapters (PostgreSQL, MySQL2) fully override this synchronously
+  // and return void; the base implementation always resolves asynchronously.
+  // (A unified async signature would require restructuring those adapters'
+  // reconnect — part of the retry-loop follow-up noted below.)
   reconnectBang(opts: { restoreTransactions?: boolean } = {}): void | Promise<void> {
-    // Mirrors Rails' `reconnect!` (abstract_adapter.rb). Concrete adapters
-    // override to actually close and reopen the raw connection, then call
-    // super to run this post-reconnect lifecycle: re-enable lazy transactions,
-    // mark verified, then reset the transaction manager and reconfigure the
-    // connection (clearing the statement cache) with no transaction state in
-    // the way. With `restoreTransactions`, any restorable transaction stack is
-    // swapped back in once the connection is fully reconfigured.
+    // Mirrors Rails' `reconnect!` (abstract_adapter.rb): re-enable lazy
+    // transactions, mark verified, then reset the transaction manager and
+    // reconfigure the connection (clearing the statement cache) with no
+    // transaction state in the way. With `restoreTransactions`, any restorable
+    // transaction stack is swapped back in once the connection is fully
+    // reconfigured.
+    //
+    // Adapters that can reuse this base lifecycle override to close and reopen
+    // the raw connection and then call `super.reconnectBang(opts)` (returning
+    // its Promise). PostgreSQL and MySQL2 instead fully override and manage
+    // their own reconnect without calling super.
     this.enableLazyTransactionsBang();
     this._rawConnectionDirty = false;
     this._lastActivity = Date.now();
     this._verified = true;
 
     // On failure, leave the adapter in a consistent unverified state and raise
-    // the translated exception (Rails' `raise translated_exception`). The catch
-    // also guards concrete-adapter overrides that call super then throw.
+    // the translated exception (Rails' `raise translated_exception`). This is
+    // wired to both the synchronous throw from resetTransaction's prefix (the
+    // try/catch below) and the async reconfigure rejection (the `.then` reject
+    // handler) — it does not cover an overriding method that throws *after*
+    // awaiting `super.reconnectBang(...)`; that is the override's concern.
     //
     // Rails' `reconnect!` additionally retries transient connection errors
     // (connection_retries/retry_deadline/backoff) before this cleanup; that

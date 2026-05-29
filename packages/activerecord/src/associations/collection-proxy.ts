@@ -1727,20 +1727,29 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         this._invalidateAssociationIds();
         return;
       }
-      // Capture the records to prune BEFORE nullifying — afterwards the nulled
-      // FKs make a reload return nothing. Only the non-through path needs this;
-      // the through branch returns early after a full reset, so its `toArray()`
-      // load is avoided entirely.
+      // Capture the records to prune BEFORE removing — afterwards a delete /
+      // nullified FK makes a reload return nothing. Only the non-through path
+      // needs this; the through branch returns early after a full reset, so its
+      // `toArray()` load is avoided entirely.
       const records = await this.toArray();
-      if (this._relationStateDiverged()) {
-        // Plain collections nullify the owner FK. Mirror `deleteAll`'s
-        // divergence guard: when in-place proxy mutations (whereBang / ...)
-        // have run, `scope()` would rebuild the unmutated association scope
-        // and nullify MORE rows than the caller constrained, so go through
-        // `super.updateAll`.
-        await super.updateAll(this._buildNullifyUpdates());
+      // Honor the association's `:dependent` like Rails `delete_all` (nil arg):
+      // `dependent == :destroy` collapses to `:delete_all`, so
+      // destroy/delete/delete_all bulk-DELETE the child rows while
+      // nullify/default nullify the owner FK — all without per-record remove
+      // callbacks (collection_association.rb:150-167 + has_many_association.rb:112-118).
+      const dep = this._assocDef.options.dependent as string | undefined;
+      const deleteRows =
+        dep === "destroy" || dep === "delete" || dep === "delete_all" || dep === "deleteAll";
+      // Mirror `deleteAll`'s divergence guard: when in-place proxy mutations
+      // (whereBang / ...) have run, `scope()` would rebuild the unmutated
+      // association scope and remove MORE rows than the caller constrained, so
+      // go through `super.*`.
+      const diverged = this._relationStateDiverged();
+      if (deleteRows) {
+        await (diverged ? super.deleteAll() : this.scope().deleteAll());
       } else {
-        await this.scope().updateAll(this._buildNullifyUpdates());
+        const nullUpdates = this._buildNullifyUpdates();
+        await (diverged ? super.updateAll(nullUpdates) : this.scope().updateAll(nullUpdates));
       }
       this._removeFromTarget(records);
       this._invalidateAssociationIds();

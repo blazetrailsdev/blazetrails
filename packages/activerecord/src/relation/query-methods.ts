@@ -2026,12 +2026,28 @@ export function buildFrom(this: QueryMethodsHost): unknown {
   return opts;
 }
 
-/** @internal */
-export function buildSelect(this: QueryMethodsHost, arel: any): void {
+/**
+ * Assemble the select-list projection nodes, mirroring Rails'
+ * `Relation#build_select` / `arel_columns`. Single source of truth shared by
+ * both `buildSelect` (the Arel-manager path) and `Relation#_buildProjections`
+ * (the legacy `toArel`/`toSql` path):
+ *
+ *  - explicit `select` values route through `arelColumns`, so bare literals
+ *    (`"1"`, `"foo()"`) emit verbatim, symbols are table-qualified, and
+ *    hash/alias forms expand correctly;
+ *  - `ignoredColumns` / `enumerateColumnsInSelectStatements` project the
+ *    explicit column list (the primary key is prepended when it would
+ *    otherwise be dropped, so instantiation can still identify rows);
+ *  - otherwise the qualified table star (`"users".*`). Qualifying avoids the
+ *    join-collision trap where a JOIN's same-named column overwrites the
+ *    target row hash (drivers keep one key per name, last write wins).
+ *
+ * @internal
+ */
+export function buildProjections(this: QueryMethodsHost): unknown[] {
   const selectCols = (this as any)._selectColumns;
   if (selectCols && selectCols.length > 0) {
-    arel.project(...arelColumns.call(this, selectCols));
-    return;
+    return arelColumns.call(this, selectCols);
   }
   const modelClass: any = (this as any)._modelClass;
   const table: any = modelClass?.arelTable;
@@ -2039,13 +2055,21 @@ export function buildSelect(this: QueryMethodsHost, arel: any): void {
     (modelClass?.ignoredColumns?.length ?? 0) > 0 ||
     modelClass?.enumerateColumnsInSelectStatements
   ) {
-    const cols: string[] = modelClass?.columnNames?.() ?? [];
+    let cols: string[] = modelClass?.columnNames?.() ?? [];
+    const pk = modelClass?.primaryKey;
+    if (typeof pk === "string" && !cols.includes(pk)) {
+      cols = [pk, ...cols];
+    }
     if (cols.length > 0) {
-      arel.project(...cols.map((f: string) => table?.get(f) ?? arelSql(f)));
-      return;
+      return cols.map((f: string) => table?.get(f) ?? arelSql(f));
     }
   }
-  arel.project(table ? table.star : arelSql("*"));
+  return [table ? table.star : arelSql("*")];
+}
+
+/** @internal */
+export function buildSelect(this: QueryMethodsHost, arel: any): void {
+  arel.project(...buildProjections.call(this));
 }
 
 /** @internal */

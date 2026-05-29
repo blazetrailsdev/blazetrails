@@ -1149,12 +1149,17 @@ export class JoinDependency {
         (this._aliasTracker.aliases.get(tableName) ?? 0) > 0 ||
         chainTables.some((ct) => ct.tableName === tableName);
       // Rails-compatible self-join alias naming (join_dependency.rb:204-206):
-      // a colliding table gets `{reflection.alias_candidate(parent_table)}`,
+      // a colliding table gets `{reflection.alias_candidate(parent.table_name)}`,
       // with `_join` appended for the non-root through links of the chain.
       // chain[0] is the target reflection (root); chain[1..] are through.
+      // parent.table_name is the parent's real table name (JoinPart delegates
+      // table_name to base_klass), not its alias.
+      const parentTableName = (modelClass as any).tableName;
       const effectiveName = collides
         ? this._aliasTracker.aliasNameFor(
-            i === 0 ? refl.aliasCandidate(sourceAlias) : `${refl.aliasCandidate(sourceAlias)}_join`,
+            i === 0
+              ? refl.aliasCandidate(parentTableName)
+              : `${refl.aliasCandidate(parentTableName)}_join`,
           )
         : tableName;
       const arelTable =

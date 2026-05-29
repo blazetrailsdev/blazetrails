@@ -6,6 +6,7 @@
  */
 import { Nodes, SelectManager, Table as ArelTable, sql as arelSql } from "@blazetrails/arel";
 import { Attribute, ValueType } from "@blazetrails/activemodel";
+import { PredicateBuilder } from "./predicate-builder.js";
 import {
   ActiveRecordError,
   ConfigurationError,
@@ -184,31 +185,19 @@ function referencesBang(this: QueryMethodsHost, ...tables: string[]): any {
 }
 
 /**
- * Table names implied by hash conditions: a nested-hash key names its table,
- * and a dotted string key names the table before the dot. Used to auto-add
- * references so `includes(...).where("joined_table.col": ...)` promotes the
- * matching include to an eager LEFT OUTER JOIN.
+ * Table names implied by hash conditions — nested-hash keys and dotted string
+ * keys — as plain strings. Used to auto-add references so
+ * `includes(...).where("joined_table.col": ...)` promotes the matching include
+ * to an eager LEFT OUTER JOIN. Returns `[]` for non-hash opts (string SQL,
+ * Arel nodes, composite-key arrays), mirroring Rails' `when Hash` branch.
  *
- * Mirrors: ActiveRecord::PredicateBuilder.references
+ * Mirrors: ActiveRecord::QueryMethods#build_where_clause (query_methods.rb:1640)
+ * — `references = PredicateBuilder.references(opts)`.
  * @internal
  */
 export function referencesFromConditions(conditions: unknown): string[] {
-  if (!conditions || typeof conditions !== "object" || Array.isArray(conditions)) return [];
-  if (conditions instanceof Nodes.Node) return [];
-  const refs: string[] = [];
-  for (const [key, value] of Object.entries(conditions as Record<string, unknown>)) {
-    if (
-      value !== null &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      !(value instanceof Nodes.Node)
-    ) {
-      refs.push(key);
-    } else if (key.includes(".")) {
-      refs.push(key.split(".")[0]);
-    }
-  }
-  return refs;
+  if (!isPlainObject(conditions)) return [];
+  return PredicateBuilder.references(conditions).map((ref) => ref.value);
 }
 
 /** Validate and resolve a CTE name+query into a SQL string. */
@@ -772,6 +761,10 @@ export function buildWhereClause(
   }
 
   if (isPlainObject(opts)) {
+    // Mirrors build_where_clause (query_methods.rb:1640): a hash condition
+    // auto-adds references for its nested-hash / dotted-key tables, so an
+    // includes(...) with a WHERE on the joined table promotes to eager JOIN.
+    referencesBang.call(this, ...referencesFromConditions(opts));
     const mc = (this as any)._modelClass;
     const aliases: Record<string, string> = mc?._attributeAliases ?? {};
     const normalized: Record<string, unknown> = {};
@@ -792,7 +785,6 @@ export function buildWhereClause(
 
 function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
   if (opts == null) return this;
-  referencesBang.call(this, ...referencesFromConditions(opts));
   const clause = buildWhereClause.call(this, opts, rest);
   this._whereClause.predicates.push(...clause.predicates);
   return this;

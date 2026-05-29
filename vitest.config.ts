@@ -203,6 +203,7 @@ export default defineConfig({
             "packages/*/src/**/*.test.ts",
             "scripts/guides-typecheck/*.test.ts",
             "scripts/api-compare/*.test.ts",
+            "scripts/codemods/*.test.ts",
             "scripts/fixtures-compare/*.test.ts",
             "scripts/parity/**/*.test.ts",
             "scripts/d1-migrate.test.ts",

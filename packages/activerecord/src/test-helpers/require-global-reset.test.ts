@@ -6,13 +6,15 @@ import {
   useGlobalReset,
 } from "./require-global-reset.js";
 
-// The refcount is process-global; drain any residue so a failing assertion
-// in one test can't leave the global beforeEach drop armed for the next.
-afterEach(() => {
-  while (shouldRunGlobalReset()) popRequireGlobalReset();
-});
-
 describe("requireGlobalReset", () => {
+  // The refcount is process-global; drain any residue so a failing assertion
+  // in one test can't leave the global beforeEach drop armed for the next.
+  // Scoped to this describe so it doesn't pop the refcount that
+  // useGlobalReset()'s own beforeAll sets in the suites below.
+  afterEach(() => {
+    while (shouldRunGlobalReset()) popRequireGlobalReset();
+  });
+
   it("is opt-in: global reset is off by default", () => {
     expect(shouldRunGlobalReset()).toBe(false);
   });

@@ -549,7 +549,12 @@ export class AssociationScope {
       // (base_class.name for STI) and the value-transformation lambda.
       const nextKlass = (nextReflection as { klass?: typeof Base }).klass;
       const nextName = nextKlass ? polymorphicName(nextKlass) : "";
-      scope = this.applyScope(scope, tableName, r.type, this.transformValue(nextName));
+      // Qualify with the resolved node's name — the alias for an aliased
+      // chain, the bare table otherwise — matching Rails' `apply_scope(scope,
+      // table, ...)` where `table` is `reflection.aliased_table` (so
+      // `table.name` is the alias). Keeps the `_type` WHERE on the same
+      // identifier the JOIN uses.
+      scope = this.applyScope(scope, tableNode.name, r.type, this.transformValue(nextName));
     }
     // Wrap the join target + constraint in Arel's LeadingJoin/On nodes via
     // `join()` and push it through Relation#joins, which stores Arel join
@@ -561,16 +566,24 @@ export class AssociationScope {
 
   /**
    * Resolve the Arel table for a chain reflection. Prefers the reflection's
-   * `aliasedTable` (an Arel `Table`, possibly aliased by the AliasTracker for
-   * repeated-table chains); falls back to a bare table built from `name`.
+   * `aliasedTable` node as produced by the AliasTracker — a base `Table` on
+   * first visit, or a `TableAlias` (`real_table AS alias`) on a repeated-table
+   * chain (self-referential `has_many :through`). Returning the node verbatim
+   * keeps both the join target (`INNER JOIN "real" "alias"`) and the ON-clause
+   * column qualifiers (`"alias"."col"`) aligned with the alias — flattening a
+   * `TableAlias` to `new ArelTable(alias)` would emit `INNER JOIN "alias"` and
+   * generate invalid SQL. Falls back to a bare table built from `name`.
    * Mirrors Rails reading `reflection.aliased_table` directly as an
    * `Arel::Table` (association_scope.rb:85-86).
    *
    * @internal
    */
-  private _arelTableFor(reflection: AbstractReflection | ReflectionProxy, name: string): ArelTable {
+  private _arelTableFor(
+    reflection: AbstractReflection | ReflectionProxy,
+    name: string,
+  ): ArelTable | Nodes.TableAlias {
     const aliased = (reflection as ReflectionProxy).aliasedTable;
-    if (aliased instanceof ArelTable) return aliased;
+    if (aliased instanceof ArelTable || aliased instanceof Nodes.TableAlias) return aliased;
     if (typeof aliased === "string" && aliased) return new ArelTable(aliased);
     if (
       aliased &&

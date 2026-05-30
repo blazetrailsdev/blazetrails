@@ -91,6 +91,13 @@ describe("deprecated raw-connection initialize overload", () => {
         ArgumentError,
       );
     });
+
+    it("normalizes a null deprecated config to an empty hash", () => {
+      const { result: adapter } = captureDeprecations(
+        () => new PostgreSQLAdapter(new FakeRawConnection() as never, null as never),
+      );
+      expect(adapter).toBeInstanceOf(PostgreSQLAdapter);
+    });
   });
 
   describe("Mysql2Adapter", () => {

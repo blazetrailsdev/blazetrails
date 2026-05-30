@@ -921,9 +921,11 @@ export class AbstractAdapter implements Quoting {
    */
   protected _acceptDeprecatedRawConnection(
     rawConnection: unknown,
-    config: Record<string, unknown> = {},
+    config: Record<string, unknown> | null = {},
   ): void {
     this._unconfiguredConnection = rawConnection as AbstractAdapter | null;
+    // Mirrors Rails' `(deprecated_config || {}).symbolize_keys`
+    // (abstract_adapter.rb:142) — a `nil`/`null` config normalizes to `{}`.
     this._config = { ...config };
     // Rails' common-tail `@prepared_statements` (abstract_adapter.rb:159) runs
     // for the deprecated path too, derived from `@config` falling back to

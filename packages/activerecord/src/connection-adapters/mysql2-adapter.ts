@@ -374,14 +374,15 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // pre-opened mysql2 connection passed positionally is stashed in
     // `_unconfiguredConnection`, mirroring Rails' `initialize`, which likewise
     // only stashes (`@unconfigured_connection`) — usability comes later via
-    // `verify!`. The base `verifyBang` (abstract-adapter.ts) promotes the
-    // stash, but Mysql2Adapter OVERRIDES `verifyBang` and does not yet consume
-    // `_unconfiguredConnection`. We hold the adapter inert (fake-connection
-    // guard) so it does NOT try to open a fresh pool from the empty
-    // `_poolConfig`; wiring the stashed connection into MySQL2's
-    // connection-acquisition path so the overload can serve queries is a
-    // tracked follow-up (a larger restructure). For now the overload
-    // constructs + warns + stashes but is not yet usable for queries on MySQL2.
+    // `verify!`. Mysql2Adapter inherits the base `verifyBang`
+    // (abstract-adapter.ts), which promotes the stash into `_connection`, but
+    // MySQL2 runs queries through a separate `_ensureClient()` pool — the
+    // promoted connection isn't wired into that path. We hold the adapter inert
+    // (fake-connection guard) so it does NOT open a fresh pool from the empty
+    // `_poolConfig`; wiring the stashed connection into `_ensureClient` so the
+    // overload can serve queries is a tracked follow-up (a larger restructure).
+    // For now the overload constructs + warns + stashes but is not yet usable
+    // for queries on MySQL2.
     if (Mysql2Adapter._isDeprecatedRawConnectionArg(config)) {
       deprecator().warn(RAW_CONNECTION_DEPRECATION_MESSAGE);
       this._acceptDeprecatedRawConnection(config, deprecatedConfig);

@@ -482,10 +482,12 @@ export class AbstractAdapter implements Quoting {
   // accepts a pre-opened connection instead of a config hash
   // (abstract_adapter.rb:141), ported via `_acceptDeprecatedRawConnection`
   // (wired into PostgreSQLAdapter / Mysql2Adapter constructors). The base
-  // verifyBang() read-side promotes it; PG/MySQL2 override verifyBang and do
-  // not yet consume it (a tracked connection-acquisition follow-up), so the
-  // deprecated overload currently stashes-and-warns without being usable for
-  // queries on those two adapters.
+  // verifyBang() read-side promotes it into `_connection`. PostgreSQLAdapter
+  // overrides verifyBang and does not yet consume it; Mysql2Adapter inherits
+  // the base promotion but runs queries through a separate `_ensureClient()`
+  // pool the stash isn't wired into. So on both, the deprecated overload
+  // currently stashes-and-warns without being usable for queries (a tracked
+  // connection-acquisition follow-up).
   protected _unconfiguredConnection: AbstractAdapter | null = null;
   // Mirrors Rails @raw_connection_dirty. Setters land with the per-adapter
   // exec paths (PR 25b) and reconnect-with-restore (Wave 6 follow-up);

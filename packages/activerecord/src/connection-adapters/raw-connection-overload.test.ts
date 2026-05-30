@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { ArgumentError } from "@blazetrails/activemodel";
 import { AbstractAdapter } from "./abstract-adapter.js";
 import { PostgreSQLAdapter } from "./postgresql-adapter.js";
@@ -12,17 +12,19 @@ class FakeRawConnection {
   query(): void {}
 }
 
+// Spy on the deprecator's `warn` (scoped + auto-restored) rather than mutating
+// its global `behavior`, keeping capture isolated and crash-safe — matches the
+// `vi.spyOn` / `restoreAllMocks` convention used elsewhere
+// (adapters/abstract-mysql-adapter/connection.test.ts).
 function captureDeprecations<T>(fn: () => T): { result: T; messages: string[] } {
-  const dep = deprecator();
-  const previous = dep.behavior;
   const messages: string[] = [];
-  dep.behavior = (message: unknown): void => {
+  const spy = vi.spyOn(deprecator(), "warn").mockImplementation((message?: string): void => {
     messages.push(String(message));
-  };
+  });
   try {
     return { result: fn(), messages };
   } finally {
-    dep.behavior = previous;
+    spy.mockRestore();
   }
 }
 

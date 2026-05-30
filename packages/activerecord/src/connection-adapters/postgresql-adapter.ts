@@ -1987,6 +1987,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * resets all per-connection state, and leaves the new connection to
    * be opened lazily on next use.
    *
+   * Like Rails' private `reconnect`, this does NOT reset the transaction
+   * manager — that is owned by the inherited `AbstractAdapter#reconnectBang`
+   * lifecycle, which runs the restore-aware `resetTransaction` after this
+   * raw reconnect. Direct callers that need a tx reset (e.g. `verifyBang`)
+   * do it themselves.
+   *
    * @internal
    */
   reconnect(): void {
@@ -2000,29 +2006,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     this._inTransaction = false;
     this._closed = false;
     conn?.end().catch(() => {});
-    this.resetTransaction();
     this.connect();
-  }
-
-  /**
-   * Public override so `AbstractAdapter#verifyBang()` (called by
-   * `ConnectionPool` on checkout) actually reconnects the PG
-   * connection rather than just clearing the statement cache.
-   *
-   * Unlike MySQL2, PostgreSQL does NOT yet delegate to the base
-   * `reconnectBang` lifecycle + retry loop: its `configureConnection`
-   * takes an explicit `pg.Client` (the base lifecycle calls it with no
-   * argument, configuring lazily on the next acquire instead), and
-   * `reconnect()` itself resets the transaction manager — so running the
-   * base lifecycle's restore-aware `resetTransaction` on top would clear
-   * the restorable stack first. Inheriting the loop here is a tracked
-   * follow-up (configure-with-no-client tolerance + moving the tx reset
-   * out of `reconnect()`).
-   *
-   * @internal
-   */
-  override async reconnectBang(): Promise<void> {
-    this.reconnect();
   }
 
   /**
@@ -2047,6 +2031,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
     if (this._closed || !this._rawConnection) {
       this.reconnect();
+      this.resetTransaction();
       this.verifiedBang();
       return;
     }
@@ -2056,6 +2041,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const conn = this._rawConnection;
     if (this._closed || !conn) {
       this.reconnect();
+      this.resetTransaction();
       this.verifiedBang();
       return;
     }
@@ -2063,6 +2049,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       await conn.query(";");
     } catch {
       this.reconnect();
+      this.resetTransaction();
     }
     this.verifiedBang();
   }
@@ -2128,9 +2115,17 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * `_maybeConfigureConnection` which gates on a boolean so the
    * persistent client is configured exactly once per connection.
    *
+   * The inherited `reconnectBang` lifecycle calls this argless after the
+   * raw `reconnect()` has nulled `_rawConnection`. PG opens the new
+   * connection lazily on the next acquire, where `_acquireFreshClient`
+   * runs `_maybeConfigureConnection` itself — so the argless call is a
+   * no-op (configure-on-next-acquire), mirroring Rails' connect-time
+   * `configure_connection`.
+   *
    * @internal
    */
-  async configureConnection(client: pg.Client): Promise<void> {
+  async configureConnection(client?: pg.Client): Promise<void> {
+    if (!client) return;
     return this._maybeConfigureConnection(client);
   }
 

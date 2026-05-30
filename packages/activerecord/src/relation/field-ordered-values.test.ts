@@ -66,7 +66,12 @@ describe("FieldOrderedValuesTest", () => {
     defineEnum(Post, "status", { draft: 0, published: 1, archived: 2 });
     const sql = Post.all().inOrderOf("status", ["draft", "published", "archived"]).toSql();
     expect(sql).toContain("CASE");
-    expect(sql).toContain("draft");
+    // Rails casts enum keys to their database integer via type_cast_for_database,
+    // so the keys are mapped to 0/1/2 rather than emitted as raw strings.
+    expect(sql).not.toContain("draft");
+    expect(sql).toContain("0");
+    expect(sql).toContain("1");
+    expect(sql).toContain("2");
   });
 
   it("in order of with string column", () => {

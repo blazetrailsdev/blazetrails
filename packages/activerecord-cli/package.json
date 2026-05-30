@@ -24,6 +24,7 @@
   "license": "MIT",
   "dependencies": {
     "@blazetrails/activerecord": "workspace:*",
+    "@blazetrails/activesupport": "workspace:*",
     "typescript": "^5.9.3"
   }
 }

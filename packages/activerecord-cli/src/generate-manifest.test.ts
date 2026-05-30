@@ -37,9 +37,22 @@ describe("ArGenerateManifestTest", () => {
     await seedModels(dir);
     const entries = await scanModels(dir);
     const names = entries.map((e) => e.className);
-    // Abstract ApplicationRecord + subclass count; Helper, .test.ts, index excluded.
-    expect(names).toEqual(["ApplicationRecord", "Follow", "Tweet", "User"]);
+    // Follow (via abstract ApplicationRecord) counts; the abstract base
+    // itself, Helper, the .test.ts class, and index.ts do not.
+    expect(names).toEqual(["Follow", "Tweet", "User"]);
     expect(entries.find((e) => e.className === "Follow")?.importPath).toBe("./follow.js");
+  });
+
+  it("excludes abstract bases (TS `abstract` and `static abstractClass = true`)", async () => {
+    await writeModel(
+      dir,
+      "records.ts",
+      `import { Base } from "x";\n` +
+        `export class AppRecord extends Base {\n  static abstractClass = true;\n}\n` +
+        `export class Widget extends AppRecord {}\n`,
+    );
+    const names = (await scanModels(dir)).map((e) => e.className);
+    expect(names).toEqual(["Widget"]); // AppRecord bridges the chain but isn't registered
   });
 
   it("handles an empty models dir without dangling re-exports", async () => {
@@ -53,11 +66,31 @@ describe("ArGenerateManifestTest", () => {
     const manifest = await buildManifest(dir);
     expect(manifest).toContain(`import { registerModel } from "@blazetrails/activerecord";`);
     expect(manifest).toContain(`import { User } from "./user.js";`);
-    expect(manifest).toContain(
-      `export const models = [ApplicationRecord, Follow, Tweet, User] as const;`,
-    );
+    expect(manifest).toContain(`export const models = [Follow, Tweet, User] as const;`);
     expect(manifest).toContain(`for (const m of models) registerModel(m);`);
-    expect(manifest).toContain(`export { ApplicationRecord, Follow, Tweet, User };`);
+    expect(manifest).toContain(`export { Follow, Tweet, User };`);
+  });
+
+  it("imports a default-exported model by its default binding, not a named one", async () => {
+    await writeModel(
+      dir,
+      "account.ts",
+      `import { Base } from "x";\nexport default class Account extends Base {}\n`,
+    );
+    const manifest = await buildManifest(dir);
+    expect(manifest).toContain(`import Account from "./account.js";`);
+    expect(manifest).not.toContain(`import { Account }`);
+    expect(manifest).toContain(`export { Account };`);
+  });
+
+  it("rejects two model classes that share a name (would not compile)", async () => {
+    await writeModel(dir, "a.ts", `import { Base } from "x";\nexport class Dup extends Base {}\n`);
+    await writeModel(dir, "b.ts", `import { Base } from "x";\nexport class Dup extends Base {}\n`);
+    await expect(scanModels(dir)).rejects.toThrow(/duplicate model class "Dup" in a\.ts and b\.ts/);
+  });
+
+  it("reports a friendly error when the models dir is missing", async () => {
+    await expect(scanModels(join(dir, "nope"))).rejects.toThrow(/models directory not found/);
   });
 
   it("writes the manifest, then is a byte-identical no-op on rerun", async () => {

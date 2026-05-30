@@ -1,5 +1,5 @@
-import { readdir, readFile, writeFile } from "fs/promises";
-import { basename, join } from "path";
+import { getFsAsync, getPathAsync } from "@blazetrails/activesupport";
+import type { FsAdapter } from "@blazetrails/activesupport";
 import ts from "typescript";
 
 // A class is a model worth registering when its `extends` chain reaches
@@ -16,11 +16,14 @@ const HEADER =
 export interface ModelEntry {
   className: string; // the exported class name (also the imported binding name)
   importPath: string; // ESM specifier relative to the manifest, e.g. `./user.js`
+  isDefault: boolean; // exported as `export default class` vs a named export
 }
 
 interface ClassDecl {
   name: string;
   parent: string | undefined; // the `extends` target's identifier name, if any
+  isDefault: boolean;
+  isAbstract: boolean;
   file: string;
 }
 
@@ -34,8 +37,27 @@ function isModelFile(file: string): boolean {
   );
 }
 
-function isExported(node: ts.ClassDeclaration): boolean {
-  return (ts.getModifiers(node) ?? []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+function hasModifier(node: ts.ClassDeclaration, kind: ts.SyntaxKind): boolean {
+  return (ts.getModifiers(node) ?? []).some((m) => m.kind === kind);
+}
+
+/**
+ * Whether a class is an abstract base rather than a concrete model — either
+ * the TS `abstract` keyword or the Rails-idiomatic `static abstractClass =
+ * true`. These bridge the `extends` chain (so their subclasses are found) but
+ * are never registered: they map to no table, so registering one and reflecting
+ * its schema would fail.
+ */
+function isAbstractModel(node: ts.ClassDeclaration): boolean {
+  if (hasModifier(node, ts.SyntaxKind.AbstractKeyword)) return true;
+  return node.members.some(
+    (m) =>
+      ts.isPropertyDeclaration(m) &&
+      ts.isIdentifier(m.name) &&
+      m.name.text === "abstractClass" &&
+      (m.modifiers ?? []).some((x) => x.kind === ts.SyntaxKind.StaticKeyword) &&
+      m.initializer?.kind === ts.SyntaxKind.TrueKeyword,
+  );
 }
 
 /** The identifier name of a class's `extends` clause, if it extends one. */
@@ -54,16 +76,35 @@ function extendsName(node: ts.ClassDeclaration): string | undefined {
  * the emitted manifest is byte-stable.
  */
 export async function scanModels(modelsDir: string): Promise<ModelEntry[]> {
-  const files = (await readdir(modelsDir)).filter(isModelFile).sort();
+  const fs = await getFsAsync();
+  const path = await getPathAsync();
+
+  let names: string[];
+  try {
+    names = await fs.readdir!(modelsDir);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(`models directory not found: ${modelsDir}`, { cause: err });
+    }
+    throw err;
+  }
+  const files = names.filter(isModelFile).sort();
 
   const decls: ClassDecl[] = [];
   for (const file of files) {
-    const text = await readFile(join(modelsDir, file), "utf8");
+    const text = await fs.readFile!(path.join(modelsDir, file), "utf8");
     const sf = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true);
     for (const stmt of sf.statements) {
       if (!ts.isClassDeclaration(stmt) || !stmt.name) continue;
-      if (!isExported(stmt)) continue;
-      decls.push({ name: stmt.name.text, parent: extendsName(stmt), file });
+      if (!hasModifier(stmt, ts.SyntaxKind.ExportKeyword)) continue;
+      const isDefault = hasModifier(stmt, ts.SyntaxKind.DefaultKeyword);
+      decls.push({
+        name: stmt.name.text,
+        parent: extendsName(stmt),
+        isDefault,
+        isAbstract: isAbstractModel(stmt),
+        file,
+      });
     }
   }
   const byName = new Map(decls.map((d) => [d.name, d]));
@@ -83,11 +124,25 @@ export async function scanModels(modelsDir: string): Promise<ModelEntry[]> {
     return result;
   }
 
-  return decls
-    .filter((d) => d.parent !== undefined && reachesBase(d.name, new Set()))
+  const models = decls.filter((d) => !d.isAbstract && reachesBase(d.name, new Set()));
+
+  // The manifest imports each model by its bare name, so two model classes
+  // sharing a name would emit a duplicate-identifier manifest that won't
+  // compile. Fail loudly with the conflicting files instead.
+  const seen = new Map<string, string>();
+  for (const d of models) {
+    const prior = seen.get(d.name);
+    if (prior) throw new Error(`duplicate model class "${d.name}" in ${prior} and ${d.file}`);
+    seen.set(d.name, d.file);
+  }
+
+  return models
     .map((d) => ({
       className: d.name,
-      importPath: `./${basename(d.file, ".ts")}.js`,
+      // `d.file` is a bare `*.ts` filename (isModelFile guarantees it); swap
+      // the extension for the ESM `.js` specifier the manifest imports from.
+      importPath: `./${d.file.replace(/\.ts$/, ".js")}`,
+      isDefault: d.isDefault,
     }))
     .sort((a, b) => (a.className < b.className ? -1 : a.className > b.className ? 1 : 0));
 }
@@ -97,7 +152,10 @@ export function renderManifest(entries: ModelEntry[]): string {
   const names = entries.map((e) => e.className);
   let out = HEADER;
   out += `import { registerModel } from "@blazetrails/activerecord";\n`;
-  for (const e of entries) out += `import { ${e.className} } from "${e.importPath}";\n`;
+  for (const e of entries) {
+    const binding = e.isDefault ? e.className : `{ ${e.className} }`;
+    out += `import ${binding} from "${e.importPath}";\n`;
+  }
   out += `\nexport const models = [${names.join(", ")}] as const;\n`;
   out += `for (const m of models) registerModel(m);\n`;
   if (names.length > 0) out += `\nexport { ${names.join(", ")} };\n`;
@@ -115,9 +173,9 @@ export interface ManifestResult {
   changed: boolean; // on-disk content differs (in write mode: was rewritten)
 }
 
-async function readIfPresent(path: string): Promise<string | undefined> {
+async function readIfPresent(fs: FsAdapter, path: string): Promise<string | undefined> {
   try {
-    return await readFile(path, "utf8");
+    return await fs.readFile!(path, "utf8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw err;
@@ -133,10 +191,11 @@ export async function generateManifest(
   modelsDir: string,
   options: { check?: boolean } = {},
 ): Promise<ManifestResult> {
-  const path = join(modelsDir, MANIFEST_NAME);
+  const fs = await getFsAsync();
+  const path = (await getPathAsync()).join(modelsDir, MANIFEST_NAME);
   const content = await buildManifest(modelsDir);
-  const existing = await readIfPresent(path);
+  const existing = await readIfPresent(fs, path);
   const changed = existing !== content;
-  if (!options.check && changed) await writeFile(path, content, "utf8");
+  if (!options.check && changed) await fs.writeFile!(path, content);
   return { path, content, changed };
 }

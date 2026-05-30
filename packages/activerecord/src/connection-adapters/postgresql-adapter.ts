@@ -308,6 +308,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     this._statementPool?.setMaxSize(value);
   }
 
+  constructor(config: string | (pg.PoolConfig & PostgreSQLAdapterOptions));
+  /**
+   * @deprecated Raw-connection overload (abstract_adapter.rb:141): pass a
+   * pre-opened `pg.Client`. Emits a deprecation warning; the connection is
+   * stashed for promotion. Prefer the config-hash / connection-string form.
+   */
+  constructor(rawConnection: pg.Client, deprecatedConfig?: Record<string, unknown> | null);
   constructor(
     config: string | (pg.PoolConfig & PostgreSQLAdapterOptions) | pg.Client,
     deprecatedConfig?: Record<string, unknown> | null,

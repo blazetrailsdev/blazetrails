@@ -90,9 +90,11 @@ describe("deprecated raw-connection initialize overload", () => {
     });
 
     it("raises ArgumentError when a config hash is passed with extra arguments", () => {
-      expect(() => new PostgreSQLAdapter({ database: "blog" }, { database: "blog" })).toThrow(
-        ArgumentError,
-      );
+      expect(
+        // @ts-expect-error — the overload signatures forbid a second arg for the
+        // modern config form; this deliberately exercises the runtime guard.
+        () => new PostgreSQLAdapter({ database: "blog" }, { database: "blog" }),
+      ).toThrow(ArgumentError);
     });
 
     it("normalizes a null deprecated config to an empty hash", () => {
@@ -105,6 +107,8 @@ describe("deprecated raw-connection initialize overload", () => {
     it("treats a null trailing arg as absent for a config hash (does not raise)", () => {
       // Rails' guard is falsy (`deprecated_config` nil → absent), so a null
       // second argument alongside a config hash is allowed (abstract_adapter.rb:135).
+      // @ts-expect-error — overloads forbid a second arg for the modern form;
+      // this verifies the runtime guard treats a null trailing arg as absent.
       expect(() => new PostgreSQLAdapter({ database: "blog" }, null)).not.toThrow();
     });
   });
@@ -148,6 +152,8 @@ describe("deprecated raw-connection initialize overload", () => {
 
     it("raises ArgumentError when a config hash is passed with extra arguments", () => {
       expect(
+        // @ts-expect-error — the overload signatures forbid a second arg for the
+        // modern config form; this deliberately exercises the runtime guard.
         () => new Mysql2Adapter({ database: "blog", _fakeConnection: true }, { database: "blog" }),
       ).toThrow(ArgumentError);
     });

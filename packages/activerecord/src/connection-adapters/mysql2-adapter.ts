@@ -365,6 +365,13 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     }
   }
 
+  constructor(config: string | (mysql.PoolOptions & MysqlAdapterOptions));
+  /**
+   * @deprecated Raw-connection overload (abstract_adapter.rb:141): pass a
+   * pre-opened `mysql.Connection`. Emits a deprecation warning; the connection
+   * is stashed for promotion. Prefer the config-hash / URI-string form.
+   */
+  constructor(rawConnection: mysql.Connection, deprecatedConfig?: Record<string, unknown> | null);
   constructor(
     config: string | (mysql.PoolOptions & MysqlAdapterOptions) | mysql.Connection,
     deprecatedConfig?: Record<string, unknown> | null,

@@ -4919,6 +4919,10 @@ describe("EagerAssociationTest", () => {
     // Rails `exists?` short-circuits on a falsey condition before the
     // eager_loading? raise (finder_methods.rb:367-369).
     expect(await essays.eagerLoad("writer").exists(false)).toBe(false);
+    // Misspelled eager-load names raise on the calculation path too — Rails
+    // construct_join_dependency → find_reflection (join_dependency.rb), so count
+    // doesn't silently ignore an unknown association.
+    await expect(essays.eagerLoad("nope").count()).rejects.toThrow(/misspelled it/);
   });
   it("preloading has_many_through association avoids calling association.reader", async () => {
     class PhmtAuthor extends Base {

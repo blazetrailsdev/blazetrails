@@ -2583,12 +2583,15 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Surface raise-worthy eager-load specs (polymorphic) before building
-   * calculation/exists SQL, which never constructs a JoinDependency of its own.
-   * Mirrors Rails `apply_join_dependency`, which `count`/`exists?`/`calculate`
-   * route through over `eager_load_values | includes_values` and which raises
-   * for polymorphic associations. Capability-gap specs (CPK, unjoinable through)
-   * return false from addAssociationSpec and don't raise.
+   * Surface raise-worthy eager-load specs before building calculation/exists
+   * SQL, which never constructs a JoinDependency of its own. Mirrors Rails
+   * `apply_join_dependency`, which `count`/`exists?`/`calculate` route through
+   * over `eager_load_values | includes_values` and which raises (via
+   * `construct_join_dependency` → `build`) for both misspelled names
+   * (`ConfigurationError`) and polymorphic associations
+   * (`EagerLoadPolymorphicError`). Capability-gap specs that Rails joins fine
+   * (composite-key belongsTo, unjoinable through) do NOT raise — trails degrades
+   * them to preloading, so the calculation paths stay silent like `toArray`.
    *
    * Skips entirely when the query bypasses the JoinDependency (CTEs, set ops,
    * FROM overrides, composite PK): there `toArray` degrades to preloading
@@ -2612,7 +2615,7 @@ export class Relation<T extends Base> {
     ];
     if (specs.length === 0) return;
     const jd = new JoinDependency(this._modelClass);
-    for (const spec of specs) jd.addAssociationSpec(spec);
+    for (const spec of specs) jd.validateEagerLoadSpec(spec);
   }
 
   private _applyJoinsToManager(manager: SelectManager): void {

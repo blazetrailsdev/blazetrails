@@ -8,6 +8,13 @@ import { Base, composedOf } from "./index.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
 import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
 import { useHandlerTransactionalFixtures } from "./test-helpers/use-handler-transactional-fixtures.js";
+import { useFixtures } from "./test-helpers/use-fixtures.js";
+import { TEST_SCHEMA } from "./test-helpers/test-schema.js";
+// Aliased: a top-level `Customer` binding would make the bundler rename the inline
+// `class Customer extends Base` definitions below to `Customer2` (lexical-scope
+// de-clash), shifting their inferred table name to `customer2s` and breaking those
+// tests. The alias keeps the inline class names — and thus their table names — intact.
+import { Customer as CustomerModel, Money as MoneyClass } from "./test-helpers/models/customer.js";
 
 beforeAll(() => {
   vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");
@@ -458,6 +465,27 @@ describe("AggregationsTest", () => {
   });
 });
 
+// Fixture-backed AggregationsTest cases: mirror Rails' `fixtures :customers`
+// against the canonical Customer model + composed_of mappings, rather than the
+// ad-hoc inline Customer classes used elsewhere in this file.
+describe("AggregationsTest", () => {
+  setupHandlerSuite();
+  useHandlerTransactionalFixtures();
+  beforeAll(async () => {
+    await defineSchema(TEST_SCHEMA);
+  });
+
+  const { customers } = useFixtures(["customers"], () => Base.adapter);
+
+  // Rails: test_find_single_value_object
+  it("find single value object", () => {
+    const david = customers("david") as CustomerModel & { balance: MoneyClass };
+    expect(david.balance.amount).toBe(50);
+    expect(david.balance).toBeInstanceOf(MoneyClass);
+    expect(david.balance.exchangeTo("DKK").amount).toBe(300);
+  });
+});
+
 describe("AggregationsTest", () => {
   // Rails: test_find_multiple_value_object
   // Rails: test_change_single_value_object
@@ -524,11 +552,6 @@ describe("AggregationsTest", () => {
     // SCOPE: ~50 LOC in relation/calculations.ts; affects ~21 tests in calculations/aggregations.test.ts
   });
 
-  it.skip("find single value object", () => {
-    // BLOCKED: relation — calculation / aggregation gap
-    // ROOT-CAUSE: relation/calculations.ts#calculate or Relation#sum/avg/min/max missing Rails parity
-    // SCOPE: ~50 LOC in relation/calculations.ts; affects ~21 tests in calculations/aggregations.test.ts
-  });
   it.skip("allow nil gps is nil", () => {
     // BLOCKED: relation — calculation / aggregation gap
     // ROOT-CAUSE: relation/calculations.ts#calculate or Relation#sum/avg/min/max missing Rails parity

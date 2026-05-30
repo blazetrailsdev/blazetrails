@@ -361,6 +361,9 @@ importers:
       '@blazetrails/activerecord':
         specifier: workspace:*
         version: link:../../packages/activerecord
+      '@blazetrails/activerecord-cli':
+        specifier: workspace:*
+        version: link:../../packages/activerecord-cli
       '@blazetrails/activesupport':
         specifier: workspace:*
         version: link:../../packages/activesupport

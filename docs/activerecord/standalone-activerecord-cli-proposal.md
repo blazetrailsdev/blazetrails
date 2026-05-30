@@ -296,7 +296,11 @@ reflection from a getter without wrapping instances in a `Proxy`. Rails solves
 this with synchronous `method_missing`; for Trails this is an accepted
 edge — schemas are loaded by the first query in practice.
 
-### 6.2 `_abstractClass` own-property fix (bug)
+### 6.2 `_abstractClass` own-property fix (bug — SHIPPED #2657)
+
+> **Status:** shipped in #2657 (see the Post-merge follow-up queue below). The
+> description below is retained as historical context for the bug that was
+> fixed.
 
 `primaryAbstractClass()` / `abstractClass = true` sets `_abstractClass` on
 `ApplicationRecord`; concrete models **inherit** it via the prototype chain.

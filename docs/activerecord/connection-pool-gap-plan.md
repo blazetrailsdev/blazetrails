@@ -151,10 +151,10 @@ non-`:memory:` adapter with raw-connection reopen — Rails gates the suite
 **From #2675 (extract `currentEnv()` to unify env resolution):**
 
 - ~10–20 LOC, mechanical: `schema.ts` (~116) and `migration.ts` (~1613, ~2459)
-  still inline the same `getEnv("TRAILS_ENV") ?? getEnv("NODE_ENV") ??
-DatabaseConfigurations.defaultEnv` expression. Adopt
-  `DatabaseConfigurations.currentEnv()` there (kept out of #2675 to avoid
-  extra-file overlap).
+  still inline the same
+  `getEnv("TRAILS_ENV") ?? getEnv("NODE_ENV") ?? DatabaseConfigurations.defaultEnv`
+  expression. Adopt `DatabaseConfigurations.currentEnv()` there (kept out of
+  #2675 to avoid extra-file overlap).
 - Architectural warning for env-unification: collapsing `fromEnv` onto
   `defaultEnv` to match `forCurrentEnv` is WRONG — it breaks the runtime
   `DATABASE_URL` path (`establish-connection.test.ts`) because `autoConnect`

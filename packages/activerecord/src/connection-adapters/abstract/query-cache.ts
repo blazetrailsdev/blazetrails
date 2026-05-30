@@ -251,7 +251,6 @@ export class ConnectionPoolConfiguration {
   }
 
   disableQueryCacheBang(): void {
-    if (this._queryCacheMaxSize === null) return;
     const qc = this.queryCache;
     qc.enabled = false;
     qc.dirties = true;

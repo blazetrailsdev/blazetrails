@@ -49,4 +49,11 @@ describe("ArInitTest", () => {
     expect(second.created).toEqual([]);
     expect(second.skipped.sort()).toEqual([...EXPECTED].sort());
   });
+
+  it("surfaces non-ENOENT errors instead of clobbering the path", async () => {
+    // A file where init() expects to create the `config/` directory makes the
+    // existence probe fail with ENOTDIR — a real error, not "does not exist".
+    await writeFile(join(root, "config"), "not a dir\n", "utf8");
+    await expect(init(root)).rejects.toThrow();
+  });
 });

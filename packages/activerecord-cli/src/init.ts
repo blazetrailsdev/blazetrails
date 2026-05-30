@@ -68,8 +68,12 @@ async function exists(path: string): Promise<boolean> {
   try {
     await access(path);
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    // Only a missing path means "does not exist". Permission errors
+    // (EACCES/EPERM) etc. are real failures — surface them rather than
+    // silently treating the path as absent and clobbering it.
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw err;
   }
 }
 

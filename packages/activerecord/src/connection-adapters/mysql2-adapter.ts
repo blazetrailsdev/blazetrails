@@ -367,7 +367,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
 
   constructor(
     config: string | (mysql.PoolOptions & MysqlAdapterOptions) | mysql.Connection,
-    deprecatedConfig?: Record<string, unknown>,
+    deprecatedConfig?: Record<string, unknown> | null,
   ) {
     super();
     // Deprecated raw-connection overload (abstract_adapter.rb:141): a
@@ -392,7 +392,9 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       return;
     }
     // Mirrors abstract_adapter.rb:135 — a config hash must be the only argument.
-    if (deprecatedConfig !== undefined) {
+    // A `nil`/`null` trailing arg is treated as absent (Rails' falsy guard),
+    // so only a non-null extra argument triggers the raise.
+    if (deprecatedConfig != null) {
       throw new ArgumentError(
         "when initializing an Active Record adapter with a config hash, that should be the only argument",
       );

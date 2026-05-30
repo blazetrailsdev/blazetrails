@@ -310,7 +310,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   constructor(
     config: string | (pg.PoolConfig & PostgreSQLAdapterOptions) | pg.Client,
-    deprecatedConfig?: Record<string, unknown>,
+    deprecatedConfig?: Record<string, unknown> | null,
   ) {
     super();
     // Rails: `PostgreSQLAdapter` inherits the abstract adapter's
@@ -333,7 +333,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       return;
     }
     // Mirrors abstract_adapter.rb:135 — a config hash must be the only argument.
-    if (deprecatedConfig !== undefined) {
+    // A `nil`/`null` trailing arg is treated as absent (Rails' falsy guard),
+    // so only a non-null extra argument triggers the raise.
+    if (deprecatedConfig != null) {
       throw new ArgumentError(
         "when initializing an Active Record adapter with a config hash, that should be the only argument",
       );

@@ -12,10 +12,11 @@ class FakeRawConnection {
   query(): void {}
 }
 
-// Spy on the deprecator's `warn` (scoped + auto-restored) rather than mutating
-// its global `behavior`, keeping capture isolated and crash-safe — matches the
-// `vi.spyOn` / `restoreAllMocks` convention used elsewhere
-// (adapters/abstract-mysql-adapter/connection.test.ts).
+// Spy on the deprecator's `warn` (scoped + restored in `finally`) rather than
+// mutating its global `behavior`, keeping capture isolated and crash-safe —
+// uses the same `vi.spyOn` mechanism the suite relies on elsewhere
+// (adapters/abstract-mysql-adapter/connection.test.ts), scoped via
+// `spy.mockRestore()` instead of an `afterEach(restoreAllMocks)`.
 function captureDeprecations<T>(fn: () => T): { result: T; messages: string[] } {
   const messages: string[] = [];
   const spy = vi.spyOn(deprecator(), "warn").mockImplementation((message?: string): void => {
@@ -96,9 +97,15 @@ describe("deprecated raw-connection initialize overload", () => {
 
     it("normalizes a null deprecated config to an empty hash", () => {
       const { result: adapter } = captureDeprecations(
-        () => new PostgreSQLAdapter(new FakeRawConnection() as never, null as never),
+        () => new PostgreSQLAdapter(new FakeRawConnection() as never, null),
       );
       expect(adapter).toBeInstanceOf(PostgreSQLAdapter);
+    });
+
+    it("treats a null trailing arg as absent for a config hash (does not raise)", () => {
+      // Rails' guard is falsy (`deprecated_config` nil → absent), so a null
+      // second argument alongside a config hash is allowed (abstract_adapter.rb:135).
+      expect(() => new PostgreSQLAdapter({ database: "blog" }, null)).not.toThrow();
     });
   });
 

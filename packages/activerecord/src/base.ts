@@ -1030,10 +1030,12 @@ export class Base extends Model {
 
   /**
    * Lazily reflect the schema from the configured adapter the first time
-   * the query/persistence path needs it. Idempotent and cheap to call on
-   * every query: {@link loadSchema} caches its in-flight/settled promise
-   * per class, and a no-op resolves immediately when no adapter is
-   * configured. Lets consumers drop the explicit `loadSchema` step.
+   * the query/persistence path needs it, so consumers can drop the
+   * explicit `loadSchema` step. Only reflects when the model has no
+   * attribute definitions yet — a model that declared attributes (via
+   * `attribute()`) or already reflected once knows its schema, so this is
+   * a no-op for it (matching the pre-lazy-reflection behavior and avoiding
+   * a needless schema round-trip on the hot query path). Idempotent.
    *
    * Async analogue of Rails' synchronous `method_missing` schema load —
    * queries are already async, so awaiting here is fully contained. The
@@ -1044,6 +1046,7 @@ export class Base extends Model {
    * @internal
    */
   static ensureSchemaLoaded(this: typeof Base): Promise<void> {
+    if (this._attributeDefinitions.size > 0) return Promise.resolve();
     return this.loadSchema();
   }
 

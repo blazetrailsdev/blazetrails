@@ -1528,6 +1528,26 @@ export async function loadHasManyThrough(
     let rel = targetModel.all().where({ [targetModel.primaryKey as string]: targetIds });
     rel = applyAssociationScope(rel, options.scope, record);
     return rel.toArray();
+  } else if (sourceAssoc?.options?.through) {
+    // Nested through: the source association is itself a :through association
+    // (e.g. Categorization.post_taggings -> author.taggings, where
+    // author.taggings is `through: :posts`). Resolve it recursively on each
+    // through record rather than assuming a direct FK to the through table.
+    const results: Base[] = [];
+    for (const tr of throughRecords) {
+      const sub = await loadHasMany(tr, sourceAssoc.name, sourceAssoc.options);
+      results.push(...sub);
+    }
+    let rel3 = targetModel.all();
+    rel3 = applyAssociationScope(rel3, options.scope, record);
+    if (options.scope) {
+      const ids = results
+        .map((r) => r._readAttribute(targetModel.primaryKey as string))
+        .filter((v) => v !== null && v !== undefined);
+      if (ids.length === 0) return [];
+      return rel3.where({ [targetModel.primaryKey as string]: ids }).toArray();
+    }
+    return results;
   } else {
     // Source is has_many/has_one: target has FK pointing back to through record
     const sourceAsName = sourceAssoc?.options?.as;

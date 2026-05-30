@@ -9,7 +9,8 @@ import {
   StatementPool as MysqlStatementPool,
   type MysqlPreparedStatement,
 } from "./abstract-mysql-adapter.js";
-import { Version } from "./abstract-adapter.js";
+import { Version, RAW_CONNECTION_DEPRECATION_MESSAGE } from "./abstract-adapter.js";
+import { deprecator } from "../deprecator.js";
 import { dirtiesQueryCache } from "./abstract/query-cache.js";
 import {
   AdapterTimeout,
@@ -364,8 +365,23 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     }
   }
 
-  constructor(config: string | (mysql.PoolOptions & MysqlAdapterOptions)) {
+  constructor(
+    config: string | (mysql.PoolOptions & MysqlAdapterOptions) | mysql.Connection,
+    deprecatedConfig?: Record<string, unknown>,
+  ) {
     super();
+    // Deprecated raw-connection overload (abstract_adapter.rb:141): a
+    // pre-opened mysql2 connection passed positionally. Stash it for
+    // verifyBang to promote; the adapter stays unconnected until then,
+    // matching Rails' `@unconfigured_connection` flow.
+    if (Mysql2Adapter._isDeprecatedRawConnectionArg(config)) {
+      deprecator().warn(RAW_CONNECTION_DEPRECATION_MESSAGE);
+      this._acceptDeprecatedRawConnection(config, deprecatedConfig);
+      this._poolConfig = { flags: ["FOUND_ROWS"] };
+      this._isFakeConnection = true;
+      this._activeState = false;
+      return;
+    }
     if (typeof config === "string") {
       let waitTimeout: number | undefined;
       let uri = config;

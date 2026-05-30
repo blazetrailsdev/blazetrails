@@ -443,6 +443,17 @@ interface ConnectionCallback {
   method: (this: AbstractAdapter) => void;
 }
 
+/**
+ * Deprecation message emitted when a concrete adapter is constructed with the
+ * deprecated raw-connection overload (a pre-opened driver connection as the
+ * leading positional argument). Mirrors the soft-deprecated raw-connection
+ * branch of `AbstractAdapter#initialize` (abstract_adapter.rb:141).
+ */
+export const RAW_CONNECTION_DEPRECATION_MESSAGE =
+  "Initializing a connection adapter with a pre-opened raw connection is " +
+  "deprecated and will be removed. Pass a configuration hash (or connection " +
+  "string) and let the adapter open and manage the connection itself.";
+
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class AbstractAdapter implements Quoting {
   static readonly Version = Version;
@@ -883,6 +894,37 @@ export class AbstractAdapter implements Quoting {
         throw translated;
       }
     }
+  }
+
+  /**
+   * @internal
+   * Detects the deprecated raw-connection `initialize` overload
+   * (abstract_adapter.rb:141): the leading positional argument is a
+   * pre-opened raw driver connection (a class instance) rather than a
+   * configuration hash or connection string. Plain config objects (whose
+   * prototype is `Object.prototype` or `null`), strings, and arrays are NOT
+   * treated as raw connections — mirroring Rails' `is_a?(Hash)` discriminator.
+   */
+  protected static _isDeprecatedRawConnectionArg(arg: unknown): boolean {
+    if (typeof arg !== "object" || arg === null || Array.isArray(arg)) return false;
+    const proto = Object.getPrototypeOf(arg) as object | null;
+    return proto !== Object.prototype && proto !== null;
+  }
+
+  /**
+   * @internal
+   * Stashes a pre-opened raw connection in `_unconfiguredConnection` (promoted
+   * to the live connection by `verifyBang`), mirroring the deprecated
+   * raw-connection branch of `AbstractAdapter#initialize`. `config` mirrors
+   * Rails' trailing `deprecated_config` positional. Concrete adapters emit the
+   * deprecation warning before delegating here.
+   */
+  protected _acceptDeprecatedRawConnection(
+    rawConnection: unknown,
+    config: Record<string, unknown> = {},
+  ): void {
+    this._unconfiguredConnection = rawConnection as AbstractAdapter | null;
+    this._config = { ...config };
   }
 
   disconnectBang(): void {

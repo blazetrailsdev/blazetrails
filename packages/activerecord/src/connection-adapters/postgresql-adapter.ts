@@ -56,7 +56,8 @@ import {
   ValueTooLong,
   SQLWarning,
 } from "../errors.js";
-import { AbstractAdapter } from "./abstract-adapter.js";
+import { AbstractAdapter, RAW_CONNECTION_DEPRECATION_MESSAGE } from "./abstract-adapter.js";
+import { deprecator } from "../deprecator.js";
 import { dirtiesQueryCache } from "./abstract/query-cache.js";
 import { PostgreSQLSchemaStatements } from "./postgresql/schema-statements-class.js";
 import type { SchemaStatements, JoinTableOptions } from "./abstract/schema-statements.js";
@@ -307,11 +308,23 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     this._statementPool?.setMaxSize(value);
   }
 
-  constructor(config: string | (pg.PoolConfig & PostgreSQLAdapterOptions)) {
+  constructor(
+    config: string | (pg.PoolConfig & PostgreSQLAdapterOptions) | pg.Client,
+    deprecatedConfig?: Record<string, unknown>,
+  ) {
     super();
     // Rails: `PostgreSQLAdapter` inherits the abstract adapter's
     // `default_prepared_statements = true`.
     this.preparedStatements = true;
+    // Deprecated raw-connection overload (abstract_adapter.rb:141): a
+    // pre-opened pg.Client passed positionally. Stash it for verifyBang to
+    // promote; the adapter stays unconnected (`_pgClientOptions` null) until
+    // then, matching Rails' `@unconfigured_connection` flow.
+    if (PostgreSQLAdapter._isDeprecatedRawConnectionArg(config)) {
+      deprecator().warn(RAW_CONNECTION_DEPRECATION_MESSAGE);
+      this._acceptDeprecatedRawConnection(config, deprecatedConfig);
+      return;
+    }
     if (typeof config === "string") {
       this._minMessages = "warning";
       this._sessionVariables = {};
@@ -364,7 +377,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       minMessages,
       variables,
       ...pgConfig
-    } = config;
+    } = config as pg.PoolConfig & PostgreSQLAdapterOptions;
     if (statementLimit !== undefined) this.statementLimit = statementLimit;
     if (preparedStatements !== undefined) this.preparedStatements = preparedStatements;
     if (insertReturning !== undefined) this._useInsertReturning = insertReturning;

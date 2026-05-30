@@ -313,6 +313,17 @@ export class AssociationScope {
    * relation. For multi-step (through), `table` is a different
    * (joined-in) table — qualify the WHERE as `<table>.<key> = ?`.
    *
+   * Deviation: Rails compares Arel `Table` objects by identity
+   * (`scope.table == table`); we compare table NAMES (string equality)
+   * because Relation doesn't expose its Arel table as a comparable
+   * object yet. The two agree except for the (currently unreachable)
+   * case where a chain joins a table whose ALIAS happens to equal the
+   * scope table's name — there string equality would skip qualification
+   * that Rails' identity check would keep. The polymorphic-source-type
+   * alias coverage in the test file exercises the aliased path; if a
+   * name-collision case ever surfaces, route this through Arel `Table`
+   * identity instead.
+   *
    * Mirrors: ActiveRecord::Associations::AssociationScope#apply_scope
    * (association_scope.rb:161-167).
    */

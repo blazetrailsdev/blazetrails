@@ -654,7 +654,6 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       return attrs.map((a) => this.build(a, block));
     }
     // Rails' build calls add_to_target(build_record(...), replace: true).
-    // Through association: build the target record (no FK on target)
     const record = (this._isThrough ? this._buildThrough(attrs) : this._buildRaw(attrs)) as T;
     if (block) block(record);
     this._replaceOnTarget(record, { replace: true });

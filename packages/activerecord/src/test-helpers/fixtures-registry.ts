@@ -86,7 +86,6 @@ export function isJoinTableEntry(e: FixtureRegistryEntry): e is FixtureJoinTable
  * `useFixtures([set])` would seed foreign keys pointing at rows that can't be loaded
  * by name. Re-addable once the ref'd set becomes registerable (verified by the
  * "refs only loadable tables" conformance test):
- * - `subscriptions` → `books` (books declare ids 1-4; `book_id` would be CRC32)
  * - `cpk-reviews` → `cpk-books`: its rows `ref("cpk_books", …)`, but `ref()`
  *   resolves to a single scalar (the CRC32 label id), not the book's generated
  *   composite `id` key component — composite-target ref resolution is a separate
@@ -458,6 +457,10 @@ export const fixtureRegistry = {
   subscribers: {
     model: () => import("./models/subscriber.js").then((m) => m.Subscriber),
     data: FixtureData.subscriberFixtureData,
+  },
+  subscriptions: {
+    model: () => import("./models/subscription.js").then((m) => m.Subscription),
+    data: FixtureData.subscriptionFixtureData,
   },
   taggings: {
     model: () => import("./models/tagging.js").then((m) => m.Tagging),

@@ -24,6 +24,43 @@ The string form is called from **~146 sites across ~80 files** — which is the
 smell the migration addresses: call sites reach past the config layer and hand
 the adapter a URL directly.
 
+## Two tangled divergences (read before sizing Phase 2..N)
+
+There are actually **two** ways trails' adapter constructors differ from Rails,
+and they interact:
+
+- **(a) URL-string acceptance.** Adapters accept `string | hash` and parse the
+  URL internally. This plan's headline target.
+- **(b) Driver-native hash vs Rails config hash.** Even the _hash_ path is
+  **driver-native**: PG spreads `pg.PoolConfig` keys (`user`, `connectionString`,
+  `port`, …) straight into the client; MySQL2 spreads `mysql.PoolOptions`
+  (`user`, `uri`, …). Rails adapters instead receive a **Rails config hash**
+  (`username`, `database`, `host`, `port`, `adapter`) and translate internally —
+  PG `initialize` does `conn_params[:user] = delete(:username)`,
+  `conn_params[:dbname] = delete(:database)`, then `slice!` to valid PG keys
+  (`postgresql_adapter.rb:320-334`).
+
+Why this matters: `ConnectionUrlResolver.toHash()` emits **Rails** keys
+(`{ adapter, host, port, database, username, password }`). You **cannot** feed
+that straight into trails' current hash path — `username`/`adapter` are not pg
+`user`/valid keys, and MySQL2 would get `username` instead of `user`. So bridging
+URL→hash forces a decision about (b):
+
+- **Bridge-only (smaller):** Phase 1's helper maps resolver output → the existing
+  driver-native shape (`username→user`, drop `adapter`, etc.). Adapters stay
+  driver-native; only the URL string is removed. ~80 string sites migrate; the
+  ~38 existing driver-native hash sites are untouched. "Mechanical" holds.
+- **Full Rails fidelity (larger):** make the adapter hash path accept a **Rails
+  config hash** and do the `username→user` / `database→dbname` translation
+  internally (mirror Rails' `conn_params`). This is the real match — but it also
+  changes every existing driver-native hash call site (~38) and the adapter
+  `initialize` body, so Phase 2..N roughly doubles and stops being purely
+  mechanical.
+
+**Recommendation:** do bridge-only first (removes the URL smell, keeps deltas
+small), and track full-fidelity (b) as an explicit follow-up plan. Decide before
+Phase 1, because it dictates the helper's output shape.
+
 ### Crucial finding — it's all test code
 
 Every string-form call site is in `*.test.ts` or test infrastructure
@@ -70,19 +107,47 @@ conflicts. Do not start Phase 1 until #2700 merges; rebase onto updated `main`.
 - No call-site changes yet; no constructor changes. Pure addition + unit test.
 - ~40–60 LOC. Unblocks the mechanical migration.
 
-### Phase 2..N — Migrate call sites in batches (mechanical)
+### Phase 2..N — Migrate call sites in batches (assumes bridge-only)
 
-- Convert `new XAdapter(PG_TEST_URL)` → `new XAdapter(adapterConfigFromUrl(PG_TEST_URL))`
-  (or the helper), batch by directory to keep each PR ≤300 LOC and
-  non-overlapping with sibling agents:
-  - PG adapter tests (`adapters/postgresql/**`)
-  - MySQL adapter tests (`adapters/abstract-mysql-adapter/**`, `adapters/mysql2/**`)
-  - top-level `src/*.test.ts` (dirty, transactions, transaction-isolation, …)
-  - test-infra (`test-helpers/**`, `test-setup-worker-db.ts`)
-- ~80 files total; expect ~4–6 batch PRs. Each is find-and-replace + run the
-  touched test files. The `{ uri: MYSQL_TEST_URL }` / `{ connectionString:
-PG_TEST_URL }` hash forms (≈20 sites) already pass a hash — leave or normalize
-  to the helper for consistency.
+This is the bulk of the work and the part most worth scoping carefully. It is
+"mechanical" **only under the bridge-only decision** above (helper emits the
+driver-native shape the adapters already accept). The call sites are not all the
+same shape — there are four distinct patterns, each with its own transform:
+
+| Pattern (approx count)                                                   | Transform                                                 |
+| ------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `new XAdapter(PG_TEST_URL)` / `(MYSQL_TEST_URL)` (~85)                   | → `new XAdapter(testAdapterConfig(PG_TEST_URL))` (helper) |
+| literal URL `new XAdapter("postgres://…")` (~10)                         | → wrap the literal in the helper                          |
+| computed URL `String(c.url)`, `url.toString()`, `postgresUrl(...)` (~10) | → wrap the computed string in the helper                  |
+| already-hash `{ uri: … }` / `{ connectionString: … }` (~20)              | leave as-is (driver-native), or normalize for consistency |
+
+Batch **by directory** so each PR stays ≤300 LOC and non-overlapping with
+sibling agents (avoids the rebase-chain hazard):
+
+1. PG adapter tests (`adapters/postgresql/**`)
+2. MySQL adapter tests (`adapters/abstract-mysql-adapter/**`, `adapters/mysql2/**`)
+3. top-level `src/*.test.ts` (dirty, transactions, transaction-isolation, …)
+4. test-infra (`test-helpers/**`, `test-setup-worker-db.ts`) — do this batch
+   last within Phase 2..N: a bug here fails many suites at once.
+
+~80 files total; expect ~4–6 batch PRs.
+
+**Why it is NOT pure find-and-replace, even bridge-only:**
+
+- **Per-call assertions on URL-derived state.** Some sites build the adapter then
+  assert on `_database`, `wait_timeout`, etc. that the in-adapter URL parser
+  populated. The resolver covers host/db/port, but MySQL's `wait_timeout`
+  stripping and the `_database` URI fallback currently live in the adapter's
+  string branch — port them into the helper or they regress.
+- **`MYSQL_TEST_URL` carries query params** (`?wait_timeout=…`) in some suites;
+  the helper must preserve/thread them.
+- **`describeIf*` gating** is unaffected — only the construction call changes.
+- Run the touched test files per batch (`pnpm vitest run <files>`); do **not**
+  run the whole suite (CLAUDE.md).
+
+Under full-fidelity (b) instead, Phase 2..N also rewrites the ~38 existing
+driver-native hash sites to Rails keys and changes the adapter `initialize`
+body — see "Two tangled divergences."
 
 ### Phase final — Remove the string branch from the constructors
 

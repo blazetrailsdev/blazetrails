@@ -485,6 +485,20 @@ describe("AggregationsTest", () => {
     expect(david.balance).toBeInstanceOf(MoneyClass);
     expect(david.balance.exchangeTo("DKK").amount).toBe(300);
   });
+
+  // Rails: test_allow_nil_gps_is_nil
+  it("allow nil gps is nil", () => {
+    const zaphod = customers("zaphod") as CustomerModel & { gpsLocation: unknown };
+    expect(zaphod.gpsLocation).toBeNull();
+  });
+
+  // Rails: test_do_not_run_the_converter_when_nil_was_set
+  it("do not run the converter when nil was set", () => {
+    CustomerModel.gpsConversionWasRun = false;
+    const david = customers("david") as CustomerModel & { nonBlankGpsLocation: unknown };
+    david.nonBlankGpsLocation = null;
+    expect(CustomerModel.gpsConversionWasRun).toBe(false);
+  });
 });
 
 describe("AggregationsTest", () => {
@@ -553,11 +567,6 @@ describe("AggregationsTest", () => {
     // SCOPE: ~50 LOC in relation/calculations.ts; affects ~21 tests in calculations/aggregations.test.ts
   });
 
-  it.skip("allow nil gps is nil", () => {
-    // BLOCKED: relation — calculation / aggregation gap
-    // ROOT-CAUSE: relation/calculations.ts#calculate or Relation#sum/avg/min/max missing Rails parity
-    // SCOPE: ~50 LOC in relation/calculations.ts; affects ~21 tests in calculations/aggregations.test.ts
-  });
   it.skip("allow nil gps set to nil", () => {
     // BLOCKED: relation — calculation / aggregation gap
     // ROOT-CAUSE: relation/calculations.ts#calculate or Relation#sum/avg/min/max missing Rails parity
@@ -579,11 +588,6 @@ describe("AggregationsTest", () => {
     // SCOPE: ~50 LOC in relation/calculations.ts; affects ~21 tests in calculations/aggregations.test.ts
   });
   it.skip("nil return from converter results in failure when allow nil is false", () => {
-    // BLOCKED: relation — calculation / aggregation gap
-    // ROOT-CAUSE: relation/calculations.ts#calculate or Relation#sum/avg/min/max missing Rails parity
-    // SCOPE: ~50 LOC in relation/calculations.ts; affects ~21 tests in calculations/aggregations.test.ts
-  });
-  it.skip("do not run the converter when nil was set", () => {
     // BLOCKED: relation — calculation / aggregation gap
     // ROOT-CAUSE: relation/calculations.ts#calculate or Relation#sum/avg/min/max missing Rails parity
     // SCOPE: ~50 LOC in relation/calculations.ts; affects ~21 tests in calculations/aggregations.test.ts

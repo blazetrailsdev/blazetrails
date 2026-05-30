@@ -36,24 +36,21 @@ describe("ConnectionHandlerTest", () => {
   });
 
   it.skip("not setting writing role while using another named role raises", () => {
-    // BLOCKED: connects-to — shared-pool writing-role validation not ported
-    // ROOT-CAUSE: connectsTo lacks setupSharedConnectionPool + writing-role check
-    // SCOPE: needs connectsTo shared-pool support; not unblocked by nested connectedTo (#2547)
-    // RAILS: connection_handler_test.rb:81
+    // BLOCKED: connection-pool
+    // ROOT-CAUSE: connection-handling.ts#connectsTo: no setupSharedConnectionPool helper or writing-role validation (Rails connection_handler_test.rb:81)
+    // SCOPE: ~80 LOC connectsTo shared-pool support; affects ~3 tests
   });
 
   it.skip("fixtures dont raise if theres no writing pool config", () => {
-    // BLOCKED: connects-to — role fallback in connectsTo(database:) not ported
-    // ROOT-CAUSE: retrieveConnection by role lacks reading→writing fallback
-    // SCOPE: needs connectsTo(database:) role-aliasing; not unblocked by nested connectedTo (#2547)
-    // RAILS: connection_handler_test.rb:92
+    // BLOCKED: connection-pool
+    // ROOT-CAUSE: connection-handler.ts#retrieveConnection: no reading→writing role fallback for connectsTo(database:) (Rails connection_handler_test.rb:92)
+    // SCOPE: ~30 LOC role-aliasing; affects ~3 tests
   });
 
   it.skip("setting writing role while using another named role does not raise", () => {
-    // BLOCKED: connects-to — mutable writingRole + shared-pool setup not ported
-    // ROOT-CAUSE: connectsTo shards + ActiveRecord.writingRole mutation + setupSharedConnectionPool missing
-    // SCOPE: needs connectsTo shared-pool support; not unblocked by nested connectedTo (#2547)
-    // RAILS: connection_handler_test.rb:108
+    // BLOCKED: connection-pool
+    // ROOT-CAUSE: connection-handling.ts#connectsTo: no setupSharedConnectionPool helper or mutable writingRole (Rails connection_handler_test.rb:108)
+    // SCOPE: ~80 LOC connectsTo shared-pool support; affects ~3 tests
   });
 
   it("establish connection with primary works without deprecation", () => {
@@ -189,10 +186,9 @@ describe("ConnectionHandlerTest", () => {
   });
 
   it.skip("a class using custom pool and switching back to primary", () => {
-    // BLOCKED: base-integration — Base default-pool leaseConnection not wired for this flow
-    // ROOT-CAUSE: anonymous subclass sharing Base's pool then removeConnection→Base fallback needs connected Base + leaseConnection wiring
-    // SCOPE: needs global connection handler + Base.leaseConnection integration
-    // RAILS: connection_handler_test.rb:282
+    // BLOCKED: connection-pool
+    // ROOT-CAUSE: connection-handling.ts#leaseConnection: anonymous subclass→Base pool fallback after removeConnection not wired (Rails connection_handler_test.rb:282)
+    // SCOPE: ~50 LOC Base default-pool integration; affects ~1 test
   });
 
   it("connection specification name should fallback to parent", () => {
@@ -316,38 +312,23 @@ describe("ConnectionHandlerTest", () => {
   });
 
   it.skip("connection pool per pid", () => {
-    // BLOCKED: permanent — requires process fork
-    // ROOT-CAUSE: Process.fork (Rails guards with `if Process.respond_to?(:fork)`); no node:* / process.* allowed
-    // SCOPE: permanent skip
-    // RAILS: connection_handler_test.rb:340
+    // PERMANENT-SKIP: Ruby-only (see scripts/api-compare/unported-files.ts) — fork
   });
 
   it.skip("forked child doesnt mangle parent connection", () => {
-    // BLOCKED: permanent — requires process fork
-    // ROOT-CAUSE: Process.fork; no node:* / process.* allowed
-    // SCOPE: permanent skip
-    // RAILS: connection_handler_test.rb:361
+    // PERMANENT-SKIP: Ruby-only (see scripts/api-compare/unported-files.ts) — fork
   });
 
   it.skip("forked child recovers from disconnected parent", () => {
-    // BLOCKED: permanent — requires process fork
-    // ROOT-CAUSE: Process.fork; no node:* / process.* allowed
-    // SCOPE: permanent skip
-    // RAILS: connection_handler_test.rb:390
+    // PERMANENT-SKIP: Ruby-only (see scripts/api-compare/unported-files.ts) — fork
   });
 
   it.skip("retrieve connection pool copies schema cache from ancestor pool", () => {
-    // BLOCKED: schema-cache — schema cache not yet implemented
-    // ROOT-CAUSE: no schema cache port; also requires process fork (child inherits parent's schema cache)
-    // SCOPE: blocked on schema cache port (not yet implemented) + permanent fork dependency
-    // RAILS: connection_handler_test.rb:432
+    // PERMANENT-SKIP: Ruby-only (see scripts/api-compare/unported-files.ts) — fork
   });
 
   it.skip("pool from any process for uses most recent spec", () => {
-    // BLOCKED: permanent — requires process fork
-    // ROOT-CAUSE: Process.fork; no node:* / process.* allowed
-    // SCOPE: permanent skip
-    // RAILS: connection_handler_test.rb:455
+    // PERMANENT-SKIP: Ruby-only (see scripts/api-compare/unported-files.ts) — fork
   });
 
   it("connection pool names", () => {

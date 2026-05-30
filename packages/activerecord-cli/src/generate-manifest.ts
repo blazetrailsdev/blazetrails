@@ -41,20 +41,25 @@ function hasModifier(node: ts.ClassDeclaration, kind: ts.SyntaxKind): boolean {
   return (ts.getModifiers(node) ?? []).some((m) => m.kind === kind);
 }
 
-/** A class member that marks the class as abstract via `abstractClass = true`. */
+// `abstractClass` is the public getter/setter; `_abstractClass` is the backing
+// field `Base` actually stores (base.ts) and several models set it directly
+// (e.g. test-helpers/models/cat.ts). Accept either name.
+const ABSTRACT_FLAGS = new Set(["abstractClass", "_abstractClass"]);
+
+/** A class member that marks the class as abstract via `[_]abstractClass = true`. */
 function memberMarksAbstract(m: ts.ClassElement): boolean {
-  // `static abstractClass = true;`
+  // `static [override] abstractClass = true;` (or `_abstractClass`)
   if (
     ts.isPropertyDeclaration(m) &&
     ts.isIdentifier(m.name) &&
-    m.name.text === "abstractClass" &&
+    ABSTRACT_FLAGS.has(m.name.text) &&
     (m.modifiers ?? []).some((x) => x.kind === ts.SyntaxKind.StaticKeyword) &&
     m.initializer?.kind === ts.SyntaxKind.TrueKeyword
   ) {
     return true;
   }
-  // `static { this.abstractClass = true; }` — the dominant idiom in this repo
-  // (see activerecord test-helpers/models), so detecting it is load-bearing.
+  // `static { this.abstractClass = true; }` (or `this._abstractClass`) — the
+  // dominant idiom in this repo's models, so detecting it is load-bearing.
   return (
     ts.isClassStaticBlockDeclaration(m) &&
     m.body.statements.some(
@@ -64,7 +69,7 @@ function memberMarksAbstract(m: ts.ClassElement): boolean {
         s.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
         ts.isPropertyAccessExpression(s.expression.left) &&
         s.expression.left.expression.kind === ts.SyntaxKind.ThisKeyword &&
-        s.expression.left.name.text === "abstractClass" &&
+        ABSTRACT_FLAGS.has(s.expression.left.name.text) &&
         s.expression.right.kind === ts.SyntaxKind.TrueKeyword,
     )
   );

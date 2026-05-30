@@ -69,11 +69,13 @@ describe("FieldOrderedValuesTest", () => {
     // Rails casts enum keys to their database integer via type_cast_for_database,
     // so the CASE branches compare against the mapped integers 0/1/2 rather than the
     // raw string labels. Assert the full branch predicates (not bare substrings,
-    // which the 1-indexed THEN positions would trivially satisfy).
-    expect(sql).not.toContain("draft");
-    expect(sql).toContain('"posts"."status" = 0');
-    expect(sql).toContain('"posts"."status" = 1');
-    expect(sql).toContain('"posts"."status" = 2');
+    // which the 1-indexed THEN positions would trivially satisfy). Strip identifier
+    // quoting so the check holds across adapters (ANSI "" vs MariaDB ``).
+    const bare = sql.replace(/["`]/g, "");
+    expect(bare).not.toContain("draft");
+    expect(bare).toContain("posts.status = 0");
+    expect(bare).toContain("posts.status = 1");
+    expect(bare).toContain("posts.status = 2");
   });
 
   it("in order of with string column", () => {

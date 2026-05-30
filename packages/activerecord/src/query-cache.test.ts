@@ -1,8 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { Base } from "./index.js";
 import { adapterType, newRawTestAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
-import { QueryCache, QueryCacheStore as Store } from "./query-cache.js";
+import {
+  QueryCache,
+  QueryCacheStore as Store,
+  type QueryCacheRunTarget,
+  type QueryCacheCompleteTarget,
+} from "./query-cache.js";
 import { QueryCacheStore as RootQueryCacheStore } from "./index.js";
 import { Store as AbstractStore } from "./connection-adapters/abstract/query-cache.js";
 import { Notifications } from "@blazetrails/activesupport";
@@ -15,6 +20,29 @@ import { PoolConfig } from "./connection-adapters/pool-config.js";
 import { HashConfig } from "./database-configurations/hash-config.js";
 import type { DatabaseConfigOptions } from "./database-configurations/database-config.js";
 
+// Raw adapters and Notification subscriptions created per test are tracked here
+// and torn down in afterEach, so the suite doesn't leak `sql.active_record`
+// subscribers or (on PG/MySQL) live driver connections across tests.
+const trackedAdapters: { disconnect?(): void }[] = [];
+const trackedSubs: unknown[] = [];
+
+function rawAdapter(): any {
+  const a = newRawTestAdapter() as any;
+  trackedAdapters.push(a);
+  return a;
+}
+
+afterEach(() => {
+  for (const sub of trackedSubs.splice(0)) Notifications.unsubscribe(sub as never);
+  for (const a of trackedAdapters.splice(0)) {
+    try {
+      a.disconnect?.();
+    } catch {
+      // best-effort teardown; a failed disconnect must not fail the suite
+    }
+  }
+});
+
 // Counts `sql.active_record` cache-hit events (`cached: true`) for one adapter,
 // replacing the retired wrapper's `cacheHits` counter. The live mixin emits the
 // hit notification from `lookupSqlCache`, so a cache hit on `selectAll` (the
@@ -26,14 +54,19 @@ function trackHits(adapter: unknown): { count: number; reset(): void } {
       this.count = 0;
     },
   };
-  Notifications.subscribe("sql.active_record", (e: unknown) => {
-    const payload = (e as { payload?: { cached?: boolean; connection?: unknown } })?.payload;
-    if (payload?.cached === true && payload.connection === adapter) hits.count++;
-  });
+  trackedSubs.push(
+    Notifications.subscribe("sql.active_record", (e: unknown) => {
+      const payload = (e as { payload?: { cached?: boolean; connection?: unknown } })?.payload;
+      if (payload?.cached === true && payload.connection === adapter) hits.count++;
+    }),
+  );
   return hits;
 }
 
-function makeMiddleware(app: () => Promise<void>, targets: unknown[]): () => Promise<void> {
+function makeMiddleware(
+  app: () => Promise<void>,
+  targets: (QueryCacheRunTarget & QueryCacheCompleteTarget)[],
+): () => Promise<void> {
   let hook: { run(): void; complete(): void } | null = null;
   QueryCache.installExecutorHooks(
     {
@@ -41,7 +74,7 @@ function makeMiddleware(app: () => Promise<void>, targets: unknown[]): () => Pro
         hook = h;
       },
     },
-    targets as never,
+    targets,
   );
   return async () => {
     hook!.run();
@@ -74,7 +107,7 @@ async function setup() {
   // QueryCache mixin (`cache`/`enableQueryCacheBang`/`selectAll`) operates
   // directly on its own `_queryCache` Store — the standalone behavior the
   // retired QueryCacheAdapter wrapper used to provide.
-  const cached = newRawTestAdapter() as any;
+  const cached = rawAdapter();
   await defineSchema(cached, TEST_SCHEMA);
   cached._queryCache = new Store();
 
@@ -142,8 +175,8 @@ describe("QueryCacheTest", () => {
   });
 
   it("query cache is applied to all connections", async () => {
-    const a1 = newRawTestAdapter() as any;
-    const a2 = newRawTestAdapter() as any;
+    const a1 = rawAdapter();
+    const a2 = rawAdapter();
     a1._queryCache = new Store();
     a2._queryCache = new Store();
     const mw = makeMiddleware(async () => {
@@ -706,7 +739,7 @@ describe("QuerySerializedParamTest", () => {
 
 describe("QueryCacheExpiryTest", () => {
   it.skipIf(adapterType === "sqlite")("cache gets cleared after migration", async () => {
-    const cached = newRawTestAdapter() as any;
+    const cached = rawAdapter();
     cached._queryCache = new Store();
     const { Migration } = await import("./migration.js");
     class SetupMig extends Migration {
@@ -830,8 +863,8 @@ describe("TransactionInCachedSqlActiveRecordPayloadTest", () => {
 
 describe("QueryCache executor hooks", () => {
   it("run enables query cache on all adapters", () => {
-    const a1 = newRawTestAdapter() as any;
-    const a2 = newRawTestAdapter() as any;
+    const a1 = rawAdapter();
+    const a2 = rawAdapter();
     a1._queryCache = new Store();
     a2._queryCache = new Store();
     expect(a1.queryCache.enabled).toBe(false);
@@ -866,7 +899,7 @@ describe("QueryCache executor hooks", () => {
   });
 
   it("complete disables and clears query cache", async () => {
-    const adapter = newRawTestAdapter() as any;
+    const adapter = rawAdapter();
     adapter.enableQueryCacheBang();
     await adapter.queryCache.computeIfAbsent("SELECT 1", async () => [{ id: 1 }]);
     expect(adapter.queryCache.size).toBe(1);
@@ -876,7 +909,7 @@ describe("QueryCache executor hooks", () => {
   });
 
   it("installExecutorHooks wires run/complete to executor", () => {
-    const adapter = newRawTestAdapter() as any;
+    const adapter = rawAdapter();
     adapter._queryCache = new Store();
     let hook: { run(): void; complete(): void } | null = null;
     const executor = {

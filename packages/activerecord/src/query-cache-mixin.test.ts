@@ -161,23 +161,29 @@ describe("QueryCache mixin live adapter path", () => {
     a._queryCache = store;
     expect(a.queryCache?.enabled).toBe(true);
 
-    await b.executeMutation("INSERT INTO tasks (title) VALUES ('one')");
-    const r1 = await a.selectAll("SELECT * FROM tasks ORDER BY id");
-    expect(r1.length).toBe(1);
-    expect(a.queryCache?.size).toBe(1);
+    try {
+      await b.executeMutation("INSERT INTO tasks (title) VALUES ('one')");
+      const r1 = await a.selectAll("SELECT * FROM tasks ORDER BY id");
+      expect(r1.length).toBe(1);
+      expect(a.queryCache?.size).toBe(1);
 
-    // Out-of-band insert via `b` — `a`'s cached result stays stale, proving
-    // the second selectAll is a cache hit, not a fresh query.
-    await b.executeMutation("INSERT INTO tasks (title) VALUES ('two')");
-    const r2 = await a.selectAll("SELECT * FROM tasks ORDER BY id");
-    expect(r2.length).toBe(1);
+      // Out-of-band insert via `b` — `a`'s cached result stays stale, proving
+      // the second selectAll is a cache hit, not a fresh query.
+      await b.executeMutation("INSERT INTO tasks (title) VALUES ('two')");
+      const r2 = await a.selectAll("SELECT * FROM tasks ORDER BY id");
+      expect(r2.length).toBe(1);
 
-    // A write through `a`'s wrapped exec path dirties the cache
-    // (dirtiesQueryCache wiring on execInsert).
-    await a.execInsert("INSERT INTO tasks (title) VALUES ('three')");
-    expect(a.queryCache?.empty).toBe(true);
+      // A write through `a`'s wrapped exec path dirties the cache
+      // (dirtiesQueryCache wiring on execInsert).
+      await a.execInsert("INSERT INTO tasks (title) VALUES ('three')");
+      expect(a.queryCache?.empty).toBe(true);
 
-    const r3 = await a.selectAll("SELECT * FROM tasks ORDER BY id");
-    expect(r3.length).toBe(3);
+      const r3 = await a.selectAll("SELECT * FROM tasks ORDER BY id");
+      expect(r3.length).toBe(3);
+    } finally {
+      // `b` is a standalone raw connection (own driver pool on PG/MySQL); close
+      // it so the suite doesn't leak connections/sockets across tests.
+      (b as unknown as { disconnect(): void }).disconnect();
+    }
   });
 });

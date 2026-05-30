@@ -756,7 +756,19 @@ export class AssociationScope {
   ): unknown {
     const entryKlass = (reflection as { klass?: typeof Base }).klass;
     if (!entryKlass) return undefined;
-    const relation = this._buildEntryScope(entryKlass);
+    // Rails: `relation = reflection.build_scope(reflection.aliased_table)`
+    // (association_scope.rb:169) — the chain entry's scope lambda binds its
+    // `where(...)` predicates to the ALIASED table. For a self-referential
+    // polymorphic through (a repeated table) the entry's `imageable_type`
+    // source-type filter must qualify the joined-in alias
+    // (`children_imageables`), not the FROM table. Only repoint when the
+    // tracker actually produced an alias (a `TableAlias` node); the
+    // non-aliased case keeps `klass.arelTable` so SQL is byte-identical.
+    const aliased = (reflection as ReflectionProxy).aliasedTable;
+    const relation = this._buildEntryScope(
+      entryKlass,
+      aliased instanceof Nodes.TableAlias ? aliased : undefined,
+    );
     return invokeScopeLambda(scopeFn as ScopeLambda<unknown>, relation, owner);
   }
 
@@ -779,8 +791,20 @@ export class AssociationScope {
    * via `relation()` (core.rb:431-435), and `Base.unscoped` now wires that
    * through `_buildUnscopedRelation`, so no compensation is needed here.
    */
-  protected _buildEntryScope(entryKlass: typeof Base): unknown {
-    return (entryKlass as unknown as { unscoped: () => unknown }).unscoped();
+  protected _buildEntryScope(entryKlass: typeof Base, aliasedTable?: unknown): unknown {
+    const relation = (entryKlass as unknown as { unscoped: () => unknown }).unscoped();
+    // Point the relation's Arel table at the chain entry's alias so the
+    // lazily-built predicate builder qualifies `where(...)` predicates by
+    // the alias (Rails' `build_scope(reflection.aliased_table)`). The
+    // `TableAlias` node delegates `typeForAttribute` / `typeCastForDatabase`
+    // to the underlying table, so attribute casting is preserved. We never
+    // execute this relation's own FROM — only its WHERE/ORDER predicates are
+    // pushed onto the main scope — so swapping the table is safe.
+    if (aliasedTable) {
+      (relation as { _table?: unknown; _predicateBuilder?: unknown })._table = aliasedTable;
+      (relation as { _table?: unknown; _predicateBuilder?: unknown })._predicateBuilder = null;
+    }
+    return relation;
   }
 
   /**

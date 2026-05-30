@@ -1114,12 +1114,16 @@ describe("AssociationScope", () => {
     // the joined-in source gets aliased to `children_imageables`.
     //
     // What this pins that the non-polymorphic case doesn't: the
-    // polymorphic `_type` WHERE (`imageable_type = 'PstGallery'`, from
-    // the PolymorphicReflection source_type_scope) must coexist with
-    // the alias — the alias qualifies the owner-FK WHERE, while the
-    // `_type` filter stays qualified on the source table. Mirrors
-    // Rails' apply_scope choosing the qualifier per `scope.table ==
-    // table` (association_scope.rb:161-167).
+    // polymorphic source-type filter (`imageable_type = 'PstGallery'`,
+    // from the PolymorphicReflection source_type_scope) must qualify the
+    // ALIASED through rows — the `imageable_*` columns live on the
+    // children, joined in as `children_imageables`, not on the FROM
+    // table. Rails evaluates the scope lambda against
+    // `reflection.build_scope(reflection.aliased_table)`
+    // (association_scope.rb:169, reflection.rb:336/1243), so the
+    // `where(imageable_type:)` predicate binds to the alias. Filtering
+    // `pst_galleries.imageable_type` (the FROM side) would match the
+    // wrong rows.
     class PstGallery extends Base {
       static {
         this._tableName = "pst_galleries";
@@ -1155,8 +1159,9 @@ describe("AssociationScope", () => {
     expect(sql).toMatch(/INNER JOIN\s+["`]pst_galleries["`]\s+["`]children_imageables["`]/i);
     // Owner-FK WHERE is qualified by the alias, not the bare table.
     expect(sql).toMatch(/["`]children_imageables["`]\.["`]pst_gallery_id["`]\s*=\s*5/);
-    // Polymorphic _type filter survives aliasing, qualified on the
-    // source table (Rails' apply_scope `scope.table == table` branch).
-    expect(sql).toMatch(/["`]pst_galleries["`]\.["`]imageable_type["`]\s*=\s*'PstGallery'/);
+    // Polymorphic source-type filter qualifies the aliased through rows
+    // (Rails' build_scope(reflection.aliased_table)), NOT the FROM table.
+    expect(sql).toMatch(/["`]children_imageables["`]\.["`]imageable_type["`]\s*=\s*'PstGallery'/);
+    expect(sql).not.toMatch(/["`]pst_galleries["`]\.["`]imageable_type["`]/);
   });
 });

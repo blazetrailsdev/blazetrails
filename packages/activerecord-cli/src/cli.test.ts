@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, readFile } from "fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { run } from "./cli.js";
@@ -43,5 +43,29 @@ describe("ArCliTest", () => {
     expect(err.join("\n")).toContain("not implemented");
     expect(await run(["frobnicate"], ".")).toBe(1);
     expect(err.join("\n")).toContain('unknown command "frobnicate"');
+  });
+
+  it("generate:manifest writes models/index.ts, is idempotent, and --check detects drift", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ar-cli-"));
+    const models = join(dir, "models");
+    await mkdir(models, { recursive: true });
+    await writeFile(
+      join(models, "user.ts"),
+      `import { Base } from "@blazetrails/activerecord";\nexport class User extends Base {}\n`,
+      "utf8",
+    );
+
+    expect(await run(["generate:manifest", "--check"], dir)).toBe(1);
+    expect(err.join("\n")).toContain("out of date");
+
+    expect(await run(["generate:manifest"], dir)).toBe(0);
+    expect(out.join("\n")).toContain("write");
+    expect(await readFile(join(models, "index.ts"), "utf8")).toContain("registerModel");
+
+    out.length = 0;
+    expect(await run(["generate:manifest"], dir)).toBe(0);
+    expect(out.join("\n")).toContain("unchanged");
+    // --root targets the models dir directly; now up to date, exits 0.
+    expect(await run(["generate:manifest", "--check", "--root", models], dir)).toBe(0);
   });
 });

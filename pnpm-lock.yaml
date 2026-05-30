@@ -190,6 +190,9 @@ importers:
       '@blazetrails/activerecord':
         specifier: workspace:*
         version: link:../activerecord
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/activesupport:
     dependencies:

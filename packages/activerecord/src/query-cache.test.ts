@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Base } from "./index.js";
-import { newRawTestAdapter } from "./test-adapter.js";
+import { adapterType, newRawTestAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
 import { QueryCache, QueryCacheStore as Store } from "./query-cache.js";
 import { QueryCacheStore as RootQueryCacheStore } from "./index.js";
@@ -705,12 +705,30 @@ describe("QuerySerializedParamTest", () => {
 });
 
 describe("QueryCacheExpiryTest", () => {
-  it.skip("cache gets cleared after migration", () => {
-    // BLOCKED: DDL/migration cache invalidation isn't wired into the live mixin
-    // path. The retired QueryCacheAdapter wrapper cleared on every
-    // `executeMutation` (including schema statements); the mixin only dirties on
-    // exec{Insert,Update,Delete}/truncate/rollback. Wiring schema-statement
-    // cache-clearing is a follow-up.
+  it.skipIf(adapterType === "sqlite")("cache gets cleared after migration", async () => {
+    const cached = newRawTestAdapter() as any;
+    cached._queryCache = new Store();
+    const { Migration } = await import("./migration.js");
+    class SetupMig extends Migration {
+      async up() {
+        await this.createTable("qc_mig_tasks", (t) => {
+          t.string("title");
+        });
+      }
+      async down() {}
+    }
+    await new SetupMig().run(cached, "up");
+    cached.enableQueryCacheBang();
+    await cached.selectAll(`SELECT * FROM ${cached.quoteTableName("qc_mig_tasks")}`);
+    expect(cached.queryCache.size).toBeGreaterThan(0);
+    class ChangeMig extends Migration {
+      async up() {
+        await this.changeColumn("qc_mig_tasks", "title", "text");
+      }
+      async down() {}
+    }
+    await new ChangeMig().run(cached, "up");
+    expect(cached.queryCache.empty).toBe(true);
   });
 
   it("enable disable", async () => {

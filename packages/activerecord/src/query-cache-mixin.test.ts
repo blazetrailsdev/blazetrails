@@ -3,7 +3,7 @@
 // wrapper). The verbatim-named query_cache_test.rb cases are migrated onto the
 // mixin in Phase 3; these descriptive tests just prove the wiring is live.
 import { describe, it, expect } from "vitest";
-import { createTestAdapter } from "./test-adapter.js";
+import { createTestAdapter, newRawTestAdapter } from "./test-adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
 import { Result } from "./result.js";
 import {
@@ -146,9 +146,11 @@ describe("QueryCache mixin live adapter path", () => {
       execInsert(sql: string): Promise<unknown>;
     };
     await defineSchema(a as never, TEST_SCHEMA);
-    // A second connection on the same shared-cache database performs the
-    // out-of-band setup write whose row must NOT invalidate `a`'s cache.
-    const b = createTestAdapter();
+    // A genuinely separate connection (its own query-cache store) on the same
+    // shared-cache database performs the out-of-band setup write — its row must
+    // NOT invalidate `a`'s cache. A raw adapter is used so `b` does not share
+    // `a`'s pooled connection (and thus its store).
+    const b = newRawTestAdapter();
 
     // Install an enabled store directly so the test targets the selectAll
     // override + dirtiesQueryCache wiring on the real adapter, independent of

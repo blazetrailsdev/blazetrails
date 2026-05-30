@@ -61,13 +61,27 @@ URL→hash forces a decision about (b):
 small), and track full-fidelity (b) as an explicit follow-up plan. Decide before
 Phase 1, because it dictates the helper's output shape.
 
-### Crucial finding — it's all test code
+### Caller breakdown — mostly tests, but NOT only
 
-Every string-form call site is in `*.test.ts` or test infrastructure
-(`test-helpers/setup-adapter-suite.ts`, `test-helpers/with-transactional-fixtures.ts`).
-**No production runtime path** constructs an adapter from a URL string. So this
-migration changes test ergonomics only — runtime behavior is unaffected, which
-substantially lowers risk.
+The overwhelming majority of string-form call sites are in `*.test.ts` or test
+infrastructure. **However, there are real production callers** in the
+`DatabaseTasks` layer that build a transient adapter from a config URL:
+
+- `tasks/database-tasks.ts:1053` — `new PostgreSQLAdapter(String(c.url))`
+- `tasks/database-tasks.ts:1065` — `new Mysql2Adapter(String(c.url))`
+- `tasks/postgresql-database-tasks.ts:228, 274, 378` — `new PostgreSQLAdapter(String(c.url))` / `(parsed.toString())`
+- `tasks/mysql-database-tasks.ts:349` — `new Mysql2Adapter(String(c.url))`
+
+These run during `db:create` / `db:drop` / `db:purge` / structure tasks (an admin
+connection built straight from `config.url`). So the migration is **not** purely
+test-ergonomics: the production task callers MUST be migrated before the final
+constructor deletion, or those rake-equivalent tasks break. They get their own
+batch in Phase 2..N (below). Rails itself resolves these through
+`db_config.configuration_hash`, never by re-parsing the URL at the task layer —
+so migrating them is also the Rails-faithful direction.
+
+(Prior drafts of this doc claimed "no production path"; that was an incomplete
+search — corrected here.)
 
 ## Existing infra to reuse (don't reinvent)
 
@@ -124,13 +138,22 @@ same shape — there are four distinct patterns, each with its own transform:
 Batch **by directory** so each PR stays ≤300 LOC and non-overlapping with
 sibling agents (avoids the rebase-chain hazard):
 
-1. PG adapter tests (`adapters/postgresql/**`)
-2. MySQL adapter tests (`adapters/abstract-mysql-adapter/**`, `adapters/mysql2/**`)
-3. top-level `src/*.test.ts` (dirty, transactions, transaction-isolation, …)
-4. test-infra (`test-helpers/**`, `test-setup-worker-db.ts`) — do this batch
+1. **Production `DatabaseTasks` callers** (`tasks/database-tasks.ts`,
+   `tasks/postgresql-database-tasks.ts`, `tasks/mysql-database-tasks.ts`) — the
+   non-test sites that pass `String(c.url)`. **This batch is mandatory and must
+   precede Phase final**, or `db:create`/`db:drop`/structure tasks break.
+   Resolve `c.url` → hash via the config layer (these already have a
+   `DatabaseConfig`, so prefer `configuration_hash` over re-parsing). Has its own
+   tests; verify them.
+2. PG adapter tests (`adapters/postgresql/**`)
+3. MySQL adapter tests (`adapters/abstract-mysql-adapter/**`, `adapters/mysql2/**`)
+4. top-level `src/*.test.ts` (dirty, transactions, transaction-isolation, …)
+5. test-infra (`test-helpers/**`, `test-setup-worker-db.ts`) — do this batch
    last within Phase 2..N: a bug here fails many suites at once.
 
-~80 files total; expect ~4–6 batch PRs.
+~80 files total; expect ~4–6 batch PRs. **Phase final is blocked until batch 1
+(production callers) lands** — that's the one batch whose omission causes a
+runtime regression, not just red tests.
 
 **Why it is NOT pure find-and-replace, even bridge-only:**
 
@@ -169,9 +192,11 @@ for explicit go/no-go.
 
 ## Risks / open questions
 
-- **Blast radius vs. value.** Pure test-ergonomics change; the payoff is API
-  fidelity + removing duplicate URL parsing, not a runtime fix. Worth confirming
-  the cost is justified pre-release (it is the right time if ever).
+- **Blast radius vs. value.** Mostly test-ergonomics, but with a handful of real
+  production `DatabaseTasks` callers (see "Caller breakdown") — so the final
+  constructor deletion carries genuine runtime risk if batch 1 is skipped. The
+  payoff is API fidelity + removing duplicate URL parsing. Worth confirming the
+  cost is justified pre-release (it is the right time if ever).
 - **Helper shape.** `adapterConfigFromUrl(url): hash` (caller still `new`s the
   adapter) vs. `testAdapterForUrl(url): adapter` (helper owns construction).
   Former is more explicit/Rails-like; latter is terser. Lean toward the former.

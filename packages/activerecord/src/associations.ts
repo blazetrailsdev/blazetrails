@@ -1538,16 +1538,19 @@ export async function loadHasManyThrough(
       const sub = await loadHasMany(tr, sourceAssoc.name, sourceAssoc.options);
       results.push(...sub);
     }
-    let rel3 = targetModel.all();
-    rel3 = applyAssociationScope(rel3, options.scope, record);
-    if (options.scope) {
-      const ids = results
-        .map((r) => r._readAttribute(targetModel.primaryKey as string))
-        .filter((v) => v !== null && v !== undefined);
-      if (ids.length === 0) return [];
-      return rel3.where({ [targetModel.primaryKey as string]: ids }).toArray();
-    }
-    return results;
+    if (!options.scope) return results;
+    // Re-apply the outer association's own scope (e.g. an `order`/`where` on
+    // the nested HMT) by reloading the resolved targets through it.
+    const ids = results
+      .map((r) => r._readAttribute(targetModel.primaryKey as string))
+      .filter((v) => v !== null && v !== undefined);
+    if (ids.length === 0) return [];
+    const rel3 = applyAssociationScope(
+      targetModel.all().where({ [targetModel.primaryKey as string]: ids }),
+      options.scope,
+      record,
+    );
+    return rel3.toArray();
   } else {
     // Source is has_many/has_one: target has FK pointing back to through record
     const sourceAsName = sourceAssoc?.options?.as;

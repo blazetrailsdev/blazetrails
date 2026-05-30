@@ -26,7 +26,7 @@ export default config;
 const MODELS_INDEX = renderManifest([]);
 
 const DB_GLUE = `import { Base } from "@blazetrails/activerecord";
-import { models } from "./models/index.js";
+import { models } from "./app/models/index.js";
 
 let connected = false;
 
@@ -45,7 +45,7 @@ export async function connect(): Promise<void> {
 
 const DB_SEEDS = `/**
  * Idempotent seed data — the analog of Rails' \`db/seeds.rb\`, run by
- * \`ar db:seed\`. Import models from "../models/index.js" and create here.
+ * \`ar db:seed\`. Import models from "../app/models/index.js" and create here.
  */
 export async function seed(): Promise<void> {
   // Add seed data here, e.g. \`await User.findOrCreateBy({ ... });\`.
@@ -57,7 +57,7 @@ const SCAFFOLD: ReadonlyArray<readonly [string, string]> = [
   ["config/database.ts", CONFIG_DATABASE],
   ["db/migrate/.gitkeep", ""],
   ["db/seeds.ts", DB_SEEDS],
-  ["models/index.ts", MODELS_INDEX],
+  ["app/models/index.ts", MODELS_INDEX],
   ["db.ts", DB_GLUE],
 ];
 

@@ -9,7 +9,7 @@ const EXPECTED = [
   "config/database.ts",
   "db/migrate/.gitkeep",
   "db/seeds.ts",
-  "models/index.ts",
+  "app/models/index.ts",
   "db.ts",
 ];
 
@@ -56,7 +56,7 @@ describe("ArInitTest", () => {
     // `ar generate:manifest` emits for an empty models dir, or CI's
     // `--check` would flag drift the moment a project is scaffolded.
     await init(root);
-    const result = await generateManifest(join(root, "models"), { check: true });
+    const result = await generateManifest(join(root, "app", "models"), { check: true });
     expect(result.changed).toBe(false);
   });
 

@@ -45,9 +45,9 @@ describe("ArCliTest", () => {
     expect(err.join("\n")).toContain('unknown command "frobnicate"');
   });
 
-  it("generate:manifest writes models/index.ts, is idempotent, and --check detects drift", async () => {
+  it("generate:manifest writes app/models/index.ts, is idempotent, and --check detects drift", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ar-cli-"));
-    const models = join(dir, "models");
+    const models = join(dir, "app", "models"); // the default scan root
     await mkdir(models, { recursive: true });
     await writeFile(
       join(models, "user.ts"),
@@ -71,7 +71,7 @@ describe("ArCliTest", () => {
 
   it("resolves a relative --root against the passed cwd, not process.cwd()", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ar-cli-"));
-    const models = join(dir, "app", "models");
+    const models = join(dir, "src", "models"); // a non-default root, via --root
     await mkdir(models, { recursive: true });
     await writeFile(
       join(models, "user.ts"),
@@ -79,8 +79,17 @@ describe("ArCliTest", () => {
       "utf8",
     );
 
-    expect(await run(["generate:manifest", "--root", "app/models"], dir)).toBe(0);
+    expect(await run(["generate:manifest", "--root", "src/models"], dir)).toBe(0);
     // The manifest landed under `dir`, not the test runner's process cwd.
     expect(await readFile(join(models, "index.ts"), "utf8")).toContain(`import { User }`);
+  });
+
+  it("fails fast when --root is given without a directory argument", async () => {
+    expect(await run(["generate:manifest", "--root"], ".")).toBe(1);
+    expect(err.join("\n")).toContain("--root requires a directory");
+    err.length = 0;
+    // A following flag must not be swallowed as the directory.
+    expect(await run(["generate:manifest", "--root", "--check"], ".")).toBe(1);
+    expect(err.join("\n")).toContain("--root requires a directory");
   });
 });

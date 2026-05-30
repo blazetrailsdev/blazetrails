@@ -7,8 +7,8 @@ const HELP = `ar — the CLI for standalone @blazetrails/activerecord projects
 Usage: ar <command> [options]
 
 Commands:
-  init                 Scaffold config/database.ts, db/, models/, and db.ts
-  generate:manifest    Scan models/ and (re)write models/index.ts
+  init                 Scaffold config/database.ts, db/, app/models/, and db.ts
+  generate:manifest    Scan app/models/ and (re)write app/models/index.ts
 
 Coming in later slices: typecheck, schema:dump, and the db:*
 commands (create, drop, migrate, rollback, migrate:status, seed, schema:dump,
@@ -16,21 +16,21 @@ setup, prepare, reset).
 
 Run \`ar <command> --help\` for command-specific help.`;
 
-const MANIFEST_HELP = `ar generate:manifest — regenerate models/index.ts
+const MANIFEST_HELP = `ar generate:manifest — regenerate app/models/index.ts
 
 Scans the models directory for exported classes that (transitively) extend
 \`Base\` and rewrites the registration manifest in stable alphabetical order.
 Idempotent: a second run is a no-op.
 
 Options:
-  --root <dir>   Directory to scan (default: ./models)
-  --check        Don't write; exit 1 if models/index.ts is out of date (CI).`;
+  --root <dir>   Directory to scan (default: ./app/models)
+  --check        Don't write; exit 1 if app/models/index.ts is out of date (CI).`;
 
 const INIT_HELP = `ar init — scaffold a standalone activerecord project
 
 Run in the project root. Writes config/database.ts (TRAILS_ENV-keyed),
-db/migrate/, db/seeds.ts, models/index.ts (the generated manifest), and db.ts
-(bootstrap glue). Existing files are never overwritten.`;
+db/migrate/, db/seeds.ts, app/models/index.ts (the generated manifest), and
+db.ts (bootstrap glue). Existing files are never overwritten.`;
 
 /** Commands recognized but deferred to a later slice (see proposal §5). */
 const NOT_IMPLEMENTED = new Set(
@@ -44,9 +44,18 @@ function wantsHelp(args: string[]): boolean {
   return args.includes("--help") || args.includes("-h");
 }
 
-function flagValue(args: string[], flag: string): string | undefined {
-  const i = args.indexOf(flag);
-  return i >= 0 ? args[i + 1] : undefined;
+/**
+ * Read the directory after `--root`. Returns `{ value }` (undefined when the
+ * flag is absent → caller's default applies), or `null` when `--root` is given
+ * without a usable value (missing, or another flag) — an input error the caller
+ * surfaces rather than silently scanning the wrong tree.
+ */
+function readRootFlag(args: string[]): { value: string | undefined } | null {
+  const i = args.indexOf("--root");
+  if (i < 0) return { value: undefined };
+  const value = args[i + 1];
+  if (value === undefined || value.startsWith("-")) return null;
+  return { value };
 }
 
 /**
@@ -77,10 +86,15 @@ export async function run(argv: string[], cwd: string): Promise<number> {
       console.log(MANIFEST_HELP);
       return 0;
     }
+    const root = readRootFlag(rest);
+    if (!root) {
+      console.error("ar: --root requires a directory argument.");
+      return 1;
+    }
     // Resolve `--root` (and the default) against the caller's `cwd`, not the
     // process's — keeps `run(argv, cwd)` self-consistent; absolute roots pass
     // through unchanged.
-    const modelsDir = (await getPathAsync()).resolve(cwd, flagValue(rest, "--root") ?? "models");
+    const modelsDir = (await getPathAsync()).resolve(cwd, root.value ?? "app/models");
     const check = rest.includes("--check");
     const { path, changed } = await generateManifest(modelsDir, { check });
     if (check) {

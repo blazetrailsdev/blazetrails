@@ -43,16 +43,26 @@ describe("ArGenerateManifestTest", () => {
     expect(entries.find((e) => e.className === "Follow")?.importPath).toBe("./follow.js");
   });
 
-  it("excludes abstract bases (TS `abstract` and `static abstractClass = true`)", async () => {
+  it("excludes abstract bases (abstract keyword, static field, and static block)", async () => {
+    // static-field form
     await writeModel(
       dir,
-      "records.ts",
+      "field.ts",
       `import { Base } from "x";\n` +
-        `export class AppRecord extends Base {\n  static abstractClass = true;\n}\n` +
-        `export class Widget extends AppRecord {}\n`,
+        `export class FieldBase extends Base {\n  static abstractClass = true;\n}\n` +
+        `export class Widget extends FieldBase {}\n`,
+    );
+    // static-block form — the dominant idiom in this repo's models
+    await writeModel(
+      dir,
+      "block.ts",
+      `import { Base } from "x";\n` +
+        `export class BlockBase extends Base {\n  static {\n    this.abstractClass = true;\n  }\n}\n` +
+        `export class Gadget extends BlockBase {}\n`,
     );
     const names = (await scanModels(dir)).map((e) => e.className);
-    expect(names).toEqual(["Widget"]); // AppRecord bridges the chain but isn't registered
+    // Both abstract bases bridge the chain but are not registered.
+    expect(names).toEqual(["Gadget", "Widget"]);
   });
 
   it("handles an empty models dir without dangling re-exports", async () => {

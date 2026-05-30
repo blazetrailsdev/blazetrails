@@ -68,4 +68,19 @@ describe("ArCliTest", () => {
     // --root targets the models dir directly; now up to date, exits 0.
     expect(await run(["generate:manifest", "--check", "--root", models], dir)).toBe(0);
   });
+
+  it("resolves a relative --root against the passed cwd, not process.cwd()", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ar-cli-"));
+    const models = join(dir, "app", "models");
+    await mkdir(models, { recursive: true });
+    await writeFile(
+      join(models, "user.ts"),
+      `import { Base } from "@blazetrails/activerecord";\nexport class User extends Base {}\n`,
+      "utf8",
+    );
+
+    expect(await run(["generate:manifest", "--root", "app/models"], dir)).toBe(0);
+    // The manifest landed under `dir`, not the test runner's process cwd.
+    expect(await readFile(join(models, "index.ts"), "utf8")).toContain(`import { User }`);
+  });
 });

@@ -86,7 +86,19 @@ describe("ArGenerateManifestTest", () => {
   it("rejects two model classes that share a name (would not compile)", async () => {
     await writeModel(dir, "a.ts", `import { Base } from "x";\nexport class Dup extends Base {}\n`);
     await writeModel(dir, "b.ts", `import { Base } from "x";\nexport class Dup extends Base {}\n`);
-    await expect(scanModels(dir)).rejects.toThrow(/duplicate model class "Dup" in a\.ts and b\.ts/);
+    await expect(scanModels(dir)).rejects.toThrow(
+      /duplicate exported class "Dup" in a\.ts and b\.ts/,
+    );
+  });
+
+  it("rejects a non-model duplicate rather than letting it shadow a real model", async () => {
+    // The model (a.ts) must not be silently dropped because a same-named
+    // non-model class (z.ts) overwrote it during inheritance resolution.
+    await writeModel(dir, "a.ts", `import { Base } from "x";\nexport class User extends Base {}\n`);
+    await writeModel(dir, "z.ts", `export class User {}\n`);
+    await expect(scanModels(dir)).rejects.toThrow(
+      /duplicate exported class "User" in a\.ts and z\.ts/,
+    );
   });
 
   it("reports a friendly error when the models dir is missing", async () => {

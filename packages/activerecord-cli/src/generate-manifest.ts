@@ -107,7 +107,17 @@ export async function scanModels(modelsDir: string): Promise<ModelEntry[]> {
       });
     }
   }
-  const byName = new Map(decls.map((d) => [d.name, d]));
+  // Two exported classes sharing a name collide on a single constant: the
+  // manifest can't import both, and — keying `byName` below — a non-model
+  // duplicate (`export class User {}`) would otherwise overwrite and silently
+  // hide a real model of the same name. Reject the ambiguity outright.
+  const byName = new Map<string, ClassDecl>();
+  for (const d of decls) {
+    const prior = byName.get(d.name);
+    if (prior)
+      throw new Error(`duplicate exported class "${d.name}" in ${prior.file} and ${d.file}`);
+    byName.set(d.name, d);
+  }
 
   // A class is a model iff its `extends` chain reaches `Base`; `seen` guards
   // cyclic declarations, `cache` memoizes shared ancestors.
@@ -125,16 +135,6 @@ export async function scanModels(modelsDir: string): Promise<ModelEntry[]> {
   }
 
   const models = decls.filter((d) => !d.isAbstract && reachesBase(d.name, new Set()));
-
-  // The manifest imports each model by its bare name, so two model classes
-  // sharing a name would emit a duplicate-identifier manifest that won't
-  // compile. Fail loudly with the conflicting files instead.
-  const seen = new Map<string, string>();
-  for (const d of models) {
-    const prior = seen.get(d.name);
-    if (prior) throw new Error(`duplicate model class "${d.name}" in ${prior} and ${d.file}`);
-    seen.set(d.name, d.file);
-  }
 
   return models
     .map((d) => ({

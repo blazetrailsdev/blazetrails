@@ -1,4 +1,4 @@
-import { join } from "path";
+import { getPathAsync } from "@blazetrails/activesupport";
 import { init } from "./init.js";
 import { generateManifest } from "./generate-manifest.js";
 
@@ -77,7 +77,10 @@ export async function run(argv: string[], cwd: string): Promise<number> {
       console.log(MANIFEST_HELP);
       return 0;
     }
-    const modelsDir = flagValue(rest, "--root") ?? join(cwd, "models");
+    // Resolve `--root` (and the default) against the caller's `cwd`, not the
+    // process's — keeps `run(argv, cwd)` self-consistent; absolute roots pass
+    // through unchanged.
+    const modelsDir = (await getPathAsync()).resolve(cwd, flagValue(rest, "--root") ?? "models");
     const check = rest.includes("--check");
     const { path, changed } = await generateManifest(modelsDir, { check });
     if (check) {

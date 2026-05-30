@@ -325,6 +325,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       this._acceptDeprecatedRawConnection(config, deprecatedConfig);
       return;
     }
+    // Mirrors abstract_adapter.rb:135 — a config hash must be the only argument.
+    if (deprecatedConfig !== undefined) {
+      throw new ArgumentError(
+        "when initializing an Active Record adapter with a config hash, that should be the only argument",
+      );
+    }
     if (typeof config === "string") {
       this._minMessages = "warning";
       this._sessionVariables = {};

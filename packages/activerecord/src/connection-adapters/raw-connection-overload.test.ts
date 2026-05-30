@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { ArgumentError } from "@blazetrails/activemodel";
 import { AbstractAdapter } from "./abstract-adapter.js";
 import { PostgreSQLAdapter } from "./postgresql-adapter.js";
 import { Mysql2Adapter } from "./mysql2-adapter.js";
@@ -76,6 +77,20 @@ describe("deprecated raw-connection initialize overload", () => {
       const { messages } = captureDeprecations(() => new PostgreSQLAdapter({ database: "blog" }));
       expect(messages).toEqual([]);
     });
+
+    it("honors prepared_statements from the deprecated config", () => {
+      const { result: adapter } = captureDeprecations(
+        () =>
+          new PostgreSQLAdapter(new FakeRawConnection() as never, { preparedStatements: false }),
+      );
+      expect(adapter.preparedStatements).toBe(false);
+    });
+
+    it("raises ArgumentError when a config hash is passed with extra arguments", () => {
+      expect(() => new PostgreSQLAdapter({ database: "blog" }, { database: "blog" })).toThrow(
+        ArgumentError,
+      );
+    });
   });
 
   describe("Mysql2Adapter", () => {
@@ -106,6 +121,19 @@ describe("deprecated raw-connection initialize overload", () => {
         () => new Mysql2Adapter({ database: "blog", _fakeConnection: true }),
       );
       expect(messages).toEqual([]);
+    });
+
+    it("honors prepared_statements from the deprecated config", () => {
+      const { result: adapter } = captureDeprecations(
+        () => new Mysql2Adapter(new FakeRawConnection() as never, { preparedStatements: false }),
+      );
+      expect(adapter.preparedStatements).toBe(false);
+    });
+
+    it("raises ArgumentError when a config hash is passed with extra arguments", () => {
+      expect(
+        () => new Mysql2Adapter({ database: "blog", _fakeConnection: true }, { database: "blog" }),
+      ).toThrow(ArgumentError);
     });
   });
 });

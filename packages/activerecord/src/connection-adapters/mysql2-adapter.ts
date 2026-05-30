@@ -382,6 +382,12 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       this._activeState = false;
       return;
     }
+    // Mirrors abstract_adapter.rb:135 — a config hash must be the only argument.
+    if (deprecatedConfig !== undefined) {
+      throw new ArgumentError(
+        "when initializing an Active Record adapter with a config hash, that should be the only argument",
+      );
+    }
     if (typeof config === "string") {
       let waitTimeout: number | undefined;
       let uri = config;

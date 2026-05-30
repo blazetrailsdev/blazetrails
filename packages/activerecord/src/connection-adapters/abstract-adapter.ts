@@ -925,6 +925,18 @@ export class AbstractAdapter implements Quoting {
   ): void {
     this._unconfiguredConnection = rawConnection as AbstractAdapter | null;
     this._config = { ...config };
+    // Rails' common-tail `@prepared_statements` (abstract_adapter.rb:159) runs
+    // for the deprecated path too, derived from `@config` falling back to
+    // `default_prepared_statements`. advisory_locks / default_timezone are read
+    // lazily from `_config` by their getters, so only prepared_statements needs
+    // applying here (it's cached into `_preparedStatements` at construction).
+    const configured =
+      "preparedStatements" in this._config
+        ? this._config.preparedStatements
+        : this.defaultPreparedStatements();
+    this.preparedStatements = (this.constructor as typeof AbstractAdapter).typeCastConfigToBoolean(
+      configured,
+    ) as boolean;
   }
 
   disconnectBang(): void {

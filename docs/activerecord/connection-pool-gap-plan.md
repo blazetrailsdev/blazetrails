@@ -77,12 +77,12 @@ Detail/rationale in the per-PR sections below.
   `connection-handler.test.ts` tests shipped in #2668 (2 implemented, 5
   permanent-skip fork/Marshal, 4 remain blocked with accurate annotations). Two
   sized follow-ups surfaced:
-  - ~80 LOC: `connectsTo` shared-pool + `setupSharedConnectionPool` test helper
-    - writing-role validation / role-aliasing / mutable `writingRole`. Unblocks
-      "not setting writing role while using another named role raises"
-      (`connection_handler_test.rb:81`), "fixtures dont raise if theres no writing
-      pool config" (:92), "setting writing role while using another named role does
-      not raise" (:108).
+  - ~80 LOC: `connectsTo` shared-pool, a `setupSharedConnectionPool` test
+    helper, and writing-role validation / role-aliasing / mutable `writingRole`.
+    Unblocks "not setting writing role while using another named role raises"
+    (`connection_handler_test.rb:81`), "fixtures dont raise if theres no writing
+    pool config" (:92), "setting writing role while using another named role does
+    not raise" (:108).
   - ~50 LOC: Base default-pool `leaseConnection` integration (anonymous subclass
     → Base pool fallback after `removeConnection`). Unblocks "a class using
     custom pool and switching back to primary" (:282).

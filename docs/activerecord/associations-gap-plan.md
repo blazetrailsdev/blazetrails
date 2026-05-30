@@ -428,13 +428,11 @@ for the #2585 self-join work).
 
 **From #2664 / #2670 (dependent-handling dispatch consolidation + shim delete):**
 
-- Shipped: dependent handling is consolidated through `deleteOrNullifyAllRecords`
-  and the trails-only `processDependentAssociations` shim was deleted (#2670).
-  `restrict_with_error` abort-and-populate-errors shipped in #2676.
-- ~150+ LOC (test-only, separate PR): migrate the 67 `processDependentAssociations`
-  call sites' historical pattern — superseded; remaining work is the broader
-  restrict_with_error test migration off the shim to `.destroy()` (the
-  Rails-faithful driver), tracked in `project_dependent_dispatch_followup_delete_shim`.
+- Shipped: dependent handling is consolidated through `deleteOrNullifyAllRecords`;
+  the trails-only `processDependentAssociations` shim was deleted and all 67 test
+  call sites migrated to `record.destroy()` (the Rails-faithful driver) in #2670;
+  `restrict_with_error` abort-and-populate-errors shipped in #2676. This fully
+  closes the `project_dependent_dispatch_followup_delete_shim` work item.
 - ~30 LOC: `belongs_to` dependent-destroy cascade does NOT propagate a child
   abort. Rails `belongs_to_association.rb#handle_dependency` does
   `raise ActiveRecord::Rollback unless target.destroyed?`; trails

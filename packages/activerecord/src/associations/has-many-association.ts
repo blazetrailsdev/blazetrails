@@ -222,9 +222,15 @@ export interface CountRecordsHost {
  * @internal
  */
 export async function countRecords(host: CountRecordsHost): Promise<number> {
-  const count = host.hasActiveCachedCounter()
-    ? toI(host.readCounterAttribute(host.counterCacheColumn() ?? ""))
-    : await host.countViaScope();
+  let count: number;
+  if (host.hasActiveCachedCounter()) {
+    // has_active_cached_counter? guarantees a counter column, but guard against
+    // a null column anyway — `nil.to_i == 0` in Rails.
+    const column = host.counterCacheColumn();
+    count = column == null ? 0 : toI(host.readCounterAttribute(column));
+  } else {
+    count = await host.countViaScope();
+  }
 
   if (count === 0) {
     host.retainOnlyNewRecords();

@@ -33,7 +33,7 @@ describe("CollectionProxy#count — non-through fast path", () => {
     static {
       this._tableName = "cpc_authors";
       this.attribute("name", "string");
-      this.attribute("postsCount", "integer");
+      this.attribute("cpcPostsCounted_count", "integer");
     }
   }
   class CpcPost extends Base {
@@ -47,7 +47,7 @@ describe("CollectionProxy#count — non-through fast path", () => {
   beforeAll(async () => {
     adapter = createTestAdapter();
     await defineSchema(adapter, {
-      cpc_authors: { name: "string", postsCount: "integer" },
+      cpc_authors: { name: "string", cpcPostsCounted_count: "integer" },
       cpc_posts: { cpc_author_id: "integer", title: "string" },
       cpc_comments: { cpc_post_id: "integer", body: "string" },
     });
@@ -275,13 +275,14 @@ describe("CollectionProxy#count — non-through fast path", () => {
   it("count_records reads the active counter cache instead of querying", async () => {
     // Mirrors HasManyAssociation#count_records: when the reflection has an
     // active cached counter, size() reads owner.read_attribute(counter_cache_column)
-    // rather than emitting a COUNT(*).
+    // rather than emitting a COUNT(*). `counterCache: true` derives the column
+    // name from the association (`<name>_count`).
     Associations.hasMany.call(CpcAuthor, "cpcPostsCounted", {
       className: "CpcPost",
       foreignKey: "cpc_author_id",
-      counterCache: { column: "postsCount" },
+      counterCache: true,
     });
-    const author = await CpcAuthor.create({ name: "counted", postsCount: 7 });
+    const author = await CpcAuthor.create({ name: "counted", cpcPostsCounted_count: 7 });
 
     const observed: string[] = [];
     const sub = Notifications.subscribe("sql.active_record", (event: any) => {

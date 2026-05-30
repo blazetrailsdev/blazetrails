@@ -1182,6 +1182,10 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       counterCacheColumn: () => refl?.counterCacheColumn?.() ?? null,
       readCounterAttribute: (col) => this._record.readAttribute(col),
       countViaScope: () => this.count(),
+      // Rails clamps by `association_scope.limit_value` — the association's own
+      // scope, not any in-place proxy (`whereBang`/`limitBang`) mutation. So we
+      // read the limit from the rebuilt scope even on the diverged count path,
+      // matching count_records rather than the ad-hoc query limit.
       limitValue: () =>
         (this.scope() as { limitValue?: number | null } | undefined)?.limitValue ?? null,
       retainOnlyNewRecords: () => {

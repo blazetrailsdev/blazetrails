@@ -83,7 +83,7 @@ AF10 (#2650), AF11 (#2688), AF12 (#2689)._
 
 **Round-4 follow-ups (named, PR-sized):**
 
-### follow-up: collection-size / count_records port (~30–50 LOC)
+### follow-up: collection-size / count_records port — COMPLETE (#2633, #2643, #2660, #2677, #2685)
 
 Files: `associations/collection-proxy.ts`, `associations/collection-association.ts`.
 Source: #2633, #2643, #2660, #2677, #2685.

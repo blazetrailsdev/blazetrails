@@ -53,6 +53,7 @@ import {
 } from "../associations.js";
 import { _setCollectionProxyCtor } from "./collection-proxy-slot.js";
 import { buildThroughInverseFor } from "./has-many-through-association.js";
+import { countRecords } from "./has-many-association.js";
 import { throughForeignKeyPresent } from "./through-association.js";
 import { foreignKeyPresentFor } from "./foreign-association.js";
 
@@ -1169,30 +1170,27 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    * clamp the result to the association scope's `limit_value`.
    * @internal
    */
-  private async _countRecords(): Promise<number> {
+  private _countRecords(): Promise<number> {
     const ctor = this._record.constructor as typeof Base & {
       _reflectOnAssociation?: (n: string) => unknown;
     };
     const refl = ctor._reflectOnAssociation?.(this._assocName) as
       | { hasActiveCachedCounter?: () => boolean; counterCacheColumn?: () => string | null }
       | undefined;
-
-    let count: number;
-    if (typeof refl?.hasActiveCachedCounter === "function" && refl.hasActiveCachedCounter()) {
-      const col = refl.counterCacheColumn?.() ?? null;
-      const raw = col ? this._record.readAttribute(col) : 0;
-      count = _toI(raw);
-    } else {
-      count = await this.count();
-    }
-
-    if (count === 0) {
-      this._target = this._target.filter((r) => r.isNewRecord());
-      this._targetLoaded = true;
-    }
-
-    const limitValue = (this.scope() as { limitValue?: number | null } | undefined)?.limitValue;
-    return limitValue == null ? count : Math.min(limitValue, count);
+    return countRecords({
+      hasActiveCachedCounter: () => refl?.hasActiveCachedCounter?.() ?? false,
+      counterCacheColumn: () => refl?.counterCacheColumn?.() ?? null,
+      readCounterAttribute: (col) => this._record.readAttribute(col),
+      countViaScope: () => this.count(),
+      limitValue: () =>
+        (this.scope() as { limitValue?: number | null } | undefined)?.limitValue ?? null,
+      retainOnlyNewRecords: () => {
+        this._target = this._target.filter((r) => r.isNewRecord());
+      },
+      markLoaded: () => {
+        this._targetLoaded = true;
+      },
+    });
   }
 
   /**
@@ -2929,13 +2927,4 @@ function isFindFromTarget(proxy: CollectionProxy<any>): boolean {
 /** @internal */
 function execQueries(proxy: CollectionProxy<any>): Promise<any[]> {
   return proxy.loadTarget() as Promise<any[]>;
-}
-
-/** Ruby `Object#to_i` semantics: nil → 0, leading-integer parse otherwise. */
-function _toI(value: unknown): number {
-  if (value == null) return 0;
-  if (typeof value === "number") return Math.trunc(value);
-  if (typeof value === "bigint") return Number(value);
-  const n = Number.parseInt(String(value), 10);
-  return Number.isNaN(n) ? 0 : n;
 }

@@ -317,9 +317,16 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // `default_prepared_statements = true`.
     this.preparedStatements = true;
     // Deprecated raw-connection overload (abstract_adapter.rb:141): a
-    // pre-opened pg.Client passed positionally. Stash it for verifyBang to
-    // promote; the adapter stays unconnected (`_pgClientOptions` null) until
-    // then, matching Rails' `@unconfigured_connection` flow.
+    // pre-opened pg.Client passed positionally is stashed in
+    // `_unconfiguredConnection`, mirroring Rails' `initialize`, which likewise
+    // only stashes (`@unconfigured_connection`) — usability comes later via
+    // `verify!`. The base `verifyBang` (abstract-adapter.ts) promotes the
+    // stash, but PostgreSQLAdapter OVERRIDES `verifyBang` and does not yet
+    // consume `_unconfiguredConnection` (it treats `_pgClientOptions == null`
+    // as closed). Wiring the stashed client into PG's connection-acquisition
+    // path so the overload can serve queries is a tracked follow-up
+    // (a larger restructure); for now the overload constructs + warns + stashes
+    // but the connection is not yet usable for queries on PG.
     if (PostgreSQLAdapter._isDeprecatedRawConnectionArg(config)) {
       deprecator().warn(RAW_CONNECTION_DEPRECATION_MESSAGE);
       this._acceptDeprecatedRawConnection(config, deprecatedConfig);

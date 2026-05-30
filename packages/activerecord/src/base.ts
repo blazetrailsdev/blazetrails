@@ -1028,6 +1028,25 @@ export class Base extends Model {
     }
   }
 
+  /**
+   * Lazily reflect the schema from the configured adapter the first time
+   * the query/persistence path needs it. Idempotent and cheap to call on
+   * every query: {@link loadSchema} caches its in-flight/settled promise
+   * per class, and a no-op resolves immediately when no adapter is
+   * configured. Lets consumers drop the explicit `loadSchema` step.
+   *
+   * Async analogue of Rails' synchronous `method_missing` schema load —
+   * queries are already async, so awaiting here is fully contained. The
+   * residual gap is attribute access on a record that was never queried
+   * and never loaded (e.g. `new User().handle` before any DB hit), which
+   * a getter can't await without wrapping instances in a `Proxy`.
+   *
+   * @internal
+   */
+  static ensureSchemaLoaded(this: typeof Base): Promise<void> {
+    return this.loadSchema();
+  }
+
   /** @deprecated Use {@link connection} instead. Compatibility alias. */
   static get adapter(): DatabaseAdapter {
     return this.connection;

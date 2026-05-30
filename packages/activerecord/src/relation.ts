@@ -2108,6 +2108,11 @@ export class Relation<T extends Base> {
   async toArray(): Promise<T[]> {
     if (this._isNone) return [];
     if (this._loaded) return [...this._records];
+    // Lazily reflect the schema before issuing the query so consumers
+    // don't have to call loadSchema explicitly. Idempotent and cheap.
+    await (
+      this._modelClass as unknown as { ensureSchemaLoaded(): Promise<void> }
+    ).ensureSchemaLoaded();
     if (this._loadAsyncPromise) {
       // A prior loadAsync() kicked off the query — share the in-flight
       // promise so callers drain the same query (and carry its errors)

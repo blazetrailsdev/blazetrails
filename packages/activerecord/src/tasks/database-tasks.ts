@@ -874,8 +874,14 @@ export class DatabaseTasks {
     );
     for (const [version, versionConfigs] of sorted) {
       for (const config of versionConfigs) {
-        await this.withTemporaryConnection(config, async () => {
-          await this.migrate(version, { skipInitialize: true });
+        await this.withTemporaryPool(config, async (pool) => {
+          const effectiveVersion = this.targetVersion();
+          this.checkTargetVersion(effectiveVersion ?? undefined);
+          const { Migrator } = await import("../migration.js");
+          const adapter = pool.leaseConnection();
+          const migrator = new Migrator(adapter, this._migrations);
+          await migrator.migrate(effectiveVersion ?? null);
+          adapter.schemaCache?.clear();
         });
       }
     }
@@ -903,8 +909,12 @@ export class DatabaseTasks {
       for (const [version, versionConfigs] of sorted) {
         for (const config of versionConfigs) {
           if (!dumpConfigs.includes(config)) dumpConfigs.push(config);
-          await this.withTemporaryPool(config, async () => {
-            await this.migrate(version, { skipInitialize: true });
+          await this.withTemporaryPool(config, async (pool) => {
+            const { Migrator } = await import("../migration.js");
+            const adapter = pool.leaseConnection();
+            const migrator = new Migrator(adapter, this._migrations);
+            await migrator.migrate(version ?? null);
+            adapter.schemaCache?.clear();
           });
         }
       }

@@ -114,7 +114,9 @@ export async function destroyModel(
   const migrateDir = join(root, "db", "migrate");
   const migrationSuffix = `create_${pluralize(snakeName)}`;
   const migrationMatches = await findMigrations(migrateDir, migrationSuffix);
-  const migrationPath = migrationMatches.length === 1 ? migrationMatches[0] : undefined;
+  // Take the last (most recent) match; 0 matches → undefined (no migration to delete).
+  const migrationPath =
+    migrationMatches.length > 0 ? migrationMatches[migrationMatches.length - 1] : undefined;
 
   if (!options.force) {
     const actualModel = await readIfPresent(modelPath);
@@ -134,7 +136,9 @@ export async function destroyModel(
   if (!options.dryRun) {
     await safeUnlink(modelPath);
     if (migrationPath !== undefined) await safeUnlink(migrationPath);
-    await generateManifest(join(root, "app", "models")).catch(() => undefined);
+    await generateManifest(join(root, "app", "models")).catch((err) => {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    });
   }
 
   return { modelPath, migrationPath, deleted: true };

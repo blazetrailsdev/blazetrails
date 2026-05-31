@@ -136,7 +136,7 @@ function parseStep(args: string[], fallback: number): number {
   const raw = flagValue(args, "--step");
   if (!raw) return fallback;
   const n = parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
 export async function dbMigrate(cwd: string, args: string[]): Promise<number> {
@@ -149,7 +149,7 @@ export async function dbMigrate(cwd: string, args: string[]): Promise<number> {
   await tryLoadModels(cwd);
 
   const version = flagValue(args, "--version");
-  const step = flagValue(args, "--step") ? parseStep(args, 1) : null;
+  const step = flagValue(args, "--step") !== undefined ? parseStep(args, 1) : null;
 
   try {
     if (step !== null) {
@@ -193,6 +193,7 @@ export async function dbSchemaLoad(cwd: string, _args: string[]): Promise<number
 
   const env = DatabaseConfigurations.currentEnv();
   try {
+    await DatabaseTasks.checkProtectedEnvironmentsBang(env);
     await DatabaseTasks.loadSchemaCurrent(undefined, undefined, env);
     return 0;
   } catch (err) {

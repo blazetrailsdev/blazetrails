@@ -57,12 +57,13 @@ export async function generateModel(
   const className = camelize(snakeName);
   const modelPath = join(root, "app", "models", `${snakeName}.ts`);
   const migrationPath = join(root, "db", "migrate", `${ts}_create_${pluralize(snakeName)}.ts`);
+  // Existence check runs even in dry-run so the output reflects what a real run would do.
+  if (!options.force && ((await exists(modelPath)) || (await exists(migrationPath)))) {
+    return { modelPath, migrationPath, written: false, skipped: true };
+  }
   if (!options.dryRun) {
     await mkdir(join(root, "app", "models"), { recursive: true });
     await mkdir(join(root, "db", "migrate"), { recursive: true });
-    if (!options.force && ((await exists(modelPath)) || (await exists(migrationPath)))) {
-      return { modelPath, migrationPath, written: false, skipped: true };
-    }
     await writeFile(modelPath, renderModel(className, fields), "utf8");
     await writeFile(
       migrationPath,

@@ -13,7 +13,7 @@ describe("ArGenerateModelTest", () => {
   it("writes model to app/models and migration to db/migrate", async () => {
     const result = await generateModel(dir, "Article", [], 1700000010000);
     expect(result.written).toBe(true);
-    expect(result.modelPath).toMatch(/app\/models\/article\.ts$/);
+    expect(result.modelPath).toMatch(/app[/\\]models[/\\]article\.ts$/);
     expect(result.migrationPath).toMatch(/1700000010000_create_articles\.ts$/);
   });
 

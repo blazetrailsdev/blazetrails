@@ -121,9 +121,10 @@ export async function generateMigration(
 ): Promise<GenerateMigrationResult> {
   const snakeName = normalizeSnakeName(name);
   const path = join(root, "db", "migrate", `${ts}_${snakeName}.ts`);
+  // Existence check runs even in dry-run so the output reflects what a real run would do.
+  if (!options.force && (await exists(path))) return { path, written: false, skipped: true };
   if (!options.dryRun) {
     await mkdir(join(root, "db", "migrate"), { recursive: true });
-    if (!options.force && (await exists(path))) return { path, written: false, skipped: true };
     await writeFile(path, renderMigration(snakeName, fields), "utf8");
   }
   return { path, written: !options.dryRun, skipped: false };

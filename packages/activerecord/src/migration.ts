@@ -3303,16 +3303,14 @@ export class Migrator {
     // Rails: return null when no migrations have been applied yet.
     if ((await this.currentVersionReadOnly()) === 0) return null;
     // Migrations present — metadata table must exist and carry an env stamp.
+    const noEnvMsg =
+      "Environment data not found in the schema. To resolve this issue, run: bin/rails db:environment:set";
     if (!(await this._internalMetadata.tableExists())) {
-      throw new NoEnvironmentInSchemaError(
-        "Environment data not found in the schema. To resolve this issue, run: bin/rails db:environment:set",
-      );
+      throw new NoEnvironmentInSchemaError(noEnvMsg);
     }
     const environment = await this._internalMetadata.get("environment");
     if (!environment) {
-      throw new NoEnvironmentInSchemaError(
-        "Environment data not found in the schema. To resolve this issue, run: bin/rails db:environment:set",
-      );
+      throw new NoEnvironmentInSchemaError(noEnvMsg);
     }
     return environment;
   }

@@ -405,7 +405,9 @@ describe("DatabaseTasksCreateCurrentTest", () => {
   });
   it("establishes connection for the given environments", async () => {
     await DatabaseTasks.createCurrent("development");
-    expect(establishSpy).toHaveBeenCalledWith("development");
+    expect(establishSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ adapter: "sqlite3", database: "dev.db" }),
+    );
   });
 });
 
@@ -471,7 +473,9 @@ describe("DatabaseTasksCreateCurrentThreeTierTest", () => {
 
   it("establishes connection for the given environments config", async () => {
     await DatabaseTasks.createCurrent("development");
-    expect(establishSpy).toHaveBeenCalledWith("development");
+    expect(establishSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ adapter: "sqlite3", database: "dev_primary.db" }),
+    );
   });
 });
 

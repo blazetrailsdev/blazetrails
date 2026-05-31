@@ -98,7 +98,7 @@ describe("PendingMigrationsTest", () => {
   it("db:abort_if_pending_migrations exits 1 on missing config", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ar-noconfig-"));
     expect(await run(["db:abort_if_pending_migrations"], dir)).toBe(1);
-    expect(err.join("\n")).toContain("failed to load config/database.ts");
+    expect(err.join("\n")).toContain("config/database.ts");
   });
 
   it("checkPendingMigrations resolves pending list from cwd", async () => {

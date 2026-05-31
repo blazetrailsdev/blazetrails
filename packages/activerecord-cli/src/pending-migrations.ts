@@ -1,27 +1,6 @@
-import { join, resolve } from "path";
-import { getFsAsync } from "@blazetrails/activesupport";
 import { DatabaseTasks, DatabaseConfigurations, Migrator } from "@blazetrails/activerecord";
 import type { MigrationProxy } from "@blazetrails/activerecord";
-
-async function loadDatabaseConfig(cwd: string): Promise<DatabaseConfigurations> {
-  const configPath = resolve(join(cwd, "config", "database.ts"));
-  const fsAdapter = await getFsAsync();
-  if (!fsAdapter.existsSync(configPath)) {
-    throw new Error(`config/database.ts not found at ${configPath}`);
-  }
-  const { pathToFileURL } = await import("node:url");
-  const mod = await import(pathToFileURL(configPath).href);
-  const raw = mod.default ?? mod;
-  const configs = DatabaseConfigurations.fromEnv(raw);
-  DatabaseTasks.databaseConfiguration = configs;
-  DatabaseTasks.root = cwd;
-  return configs;
-}
-
-function loadMigrations(cwd: string): void {
-  const paths = DatabaseTasks.migrationsPaths.map((p) => resolve(join(cwd, p)));
-  DatabaseTasks.registerMigrations(Migrator.discoverMigrations(paths));
-}
+import { loadDatabaseConfig, loadMigrations } from "./db-helpers.js";
 
 async function resolvePending(): Promise<MigrationProxy[]> {
   const env = DatabaseConfigurations.currentEnv();
@@ -61,17 +40,9 @@ export async function checkPendingMigrations(cwd?: string): Promise<MigrationPro
 }
 
 export async function dbAbortIfPendingMigrations(cwd: string): Promise<number> {
-  try {
-    await loadDatabaseConfig(cwd);
-  } catch (err) {
-    console.error(`ar: failed to load config/database.ts — ${String(err)}`);
-    return 1;
-  }
-  loadMigrations(cwd);
-
   let pending: MigrationProxy[];
   try {
-    pending = await resolvePending();
+    pending = await checkPendingMigrations(cwd);
   } catch (err) {
     console.error(`ar: db:abort_if_pending_migrations failed — ${String(err)}`);
     return 1;

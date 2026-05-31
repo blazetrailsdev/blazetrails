@@ -996,12 +996,17 @@ export class DatabaseTasks {
       const { ConnectionNotDefined } = await import("../errors.js");
       if (!(error instanceof ConnectionNotDefined)) throw error;
     }
+    // Preserve the shim adapter so callers that use migrationConnection() inside
+    // the fn (e.g. trailties commands pre-step-6) still get a valid connection.
+    const prevAdapter = this._adapterInstance;
     // Mirrors Rails' `ensure` which restores even if establish_connection raises.
     try {
       await Base.establishConnection(config.configuration as Record<string, unknown>);
       const pool = Base.connectionPool();
+      this._adapterInstance = pool.leaseConnection();
       return await fn(pool);
     } finally {
+      this._adapterInstance = prevAdapter;
       if (priorConfig !== null) {
         await Base.establishConnection(priorConfig.configuration as Record<string, unknown>);
       } else {

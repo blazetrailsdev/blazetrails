@@ -13,8 +13,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MAPPING_PATH =
-  process.env.TEST_FIXTURE_PARITY_MAP_PATH ??
-  path.resolve(__dirname, "test-fixture-parity.json");
+  process.env.TEST_FIXTURE_PARITY_MAP_PATH ?? path.resolve(__dirname, "test-fixture-parity.json");
 
 // Mtime-based cache: a single lint run reads the file once; tests can swap
 // the file on disk between runs and get fresh data (same pattern as expected-fixtures.mjs).

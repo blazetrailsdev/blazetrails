@@ -8,7 +8,6 @@ export async function arRunner(cwd: string, args: string[]): Promise<number> {
     process.env["TRAILS_ENV"] = args[envIdx + 1];
   }
 
-  // Find the script path: first non-flag arg, skipping --env <value>.
   let scriptPath: string | undefined;
   let scriptIdx = -1;
   for (let i = 0; i < args.length; i++) {
@@ -26,7 +25,6 @@ export async function arRunner(cwd: string, args: string[]): Promise<number> {
     console.error("ar: runner requires a script path.");
     return 1;
   }
-  // Everything after the script path is forwarded verbatim (including flags).
   const scriptArgv = args.slice(scriptIdx + 1);
 
   try {

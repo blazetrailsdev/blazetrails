@@ -114,7 +114,7 @@ export const UNPORTED_FILES: UnportedFile[] = [
   },
   {
     pattern: "fixtures.rb",
-    testFile: "fixtures_test.rb",
+    testFile: "/fixtures_test.rb",
     reason:
       "Rails-specific YAML fixtures (test/fixtures/*.yml loaded once into the DB " +
       "with named-row references and ERB preprocessing). The JS/TS ecosystem uses " +

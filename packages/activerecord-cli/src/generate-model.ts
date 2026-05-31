@@ -77,8 +77,10 @@ export async function generateModel(
     await mkdir(join(root, "db", "migrate"), { recursive: true });
     const writeFlag = { encoding: "utf8" as const, flag: options.force ? "w" : "wx" };
     // Atomic create: "wx" fails with EEXIST if a concurrent write beat the upfront check.
-    await writeFile(modelPath, renderModel(className, fields), writeFlag);
+    let modelWritten = false;
     try {
+      await writeFile(modelPath, renderModel(className, fields), writeFlag);
+      modelWritten = true;
       await writeFile(
         migrationPath,
         renderMigration(`create_${pluralize(snakeName)}`, fields),
@@ -86,8 +88,8 @@ export async function generateModel(
       );
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "EEXIST") {
-        // Clean up the model file we just created so the run leaves no partial state.
-        await unlink(modelPath).catch(() => undefined);
+        // Clean up the model file if we created it in this run to avoid partial state.
+        if (modelWritten) await unlink(modelPath).catch(() => undefined);
         return { modelPath, migrationPath, written: false, skipped: true };
       }
       throw err;

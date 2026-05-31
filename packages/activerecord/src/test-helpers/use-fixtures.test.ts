@@ -668,13 +668,13 @@ describe("fixtureRegistry seeds against TEST_SCHEMA", () => {
   // type, which needs keys + the cleartext fallback. Configure (scoped) so the
   // seed loop can reload them, and restore after so this describe doesn't leak
   // encryption config to later suites.
-  let restoreEncryption: () => void;
+  let restoreEncryption: (() => void) | undefined;
   beforeAll(async () => {
     restoreEncryption = await setupScopedEncryption();
     await defineSchema(TEST_SCHEMA);
   });
   afterAll(() => {
-    restoreEncryption();
+    restoreEncryption?.();
   });
 
   it("every registered entry seeds without error", async () => {
@@ -706,13 +706,13 @@ describe("useFixtures bootstraps the encryption add-on for encrypted fixtures", 
   // Reading encrypted fixtures back needs keys + the cleartext fallback. Configure
   // that here (scoped, with snapshot/restore) rather than in the addOn, so the
   // global encryption config doesn't leak into later suites in the worker.
-  let restoreEncryption: () => void;
+  let restoreEncryption: (() => void) | undefined;
   beforeAll(async () => {
     restoreEncryption = await setupScopedEncryption();
     await defineSchema(TEST_SCHEMA);
   });
   afterAll(() => {
-    restoreEncryption();
+    restoreEncryption?.();
   });
 
   // EncryptedBook calls `encrypts("name", { deterministic: true })` in a static
@@ -757,6 +757,34 @@ describe("useFixtures encryption add-on is opt-in", () => {
     // A non-encryption fixture never carries the hook, so loading it can't pull
     // the encryption add-on into the runtime.
     expect((fixtureRegistry.authors as { addOn?: unknown }).addOn).toBeUndefined();
+  });
+
+  it("awaits an entry's addOn before invoking its model thunk", async () => {
+    // The contract that makes the add-on work: `resolveFixtureNames` must run
+    // `addOn` (which registers the encryption hooks) BEFORE the `model` thunk
+    // imports book-encrypted.ts, or the `encrypts()` static block throws. Spy on
+    // a real entry (stubbing the model so no actual import happens) and assert the
+    // call order, so a regression that moves the hook after the thunk is caught.
+    type SpyableEntry = { addOn?: () => Promise<void>; model: () => Promise<typeof Base> };
+    const entry = fixtureRegistry.encryptedBooks as unknown as SpyableEntry;
+    const originalAddOn = entry.addOn;
+    const originalModel = entry.model;
+    const order: string[] = [];
+    const stubModel = { tableName: "encrypted_books" } as unknown as typeof Base;
+    entry.addOn = vi.fn(async () => {
+      order.push("addOn");
+    });
+    entry.model = vi.fn(async () => {
+      order.push("model");
+      return stubModel;
+    });
+    try {
+      await resolveFixtureNames(["encryptedBooks"]);
+    } finally {
+      entry.addOn = originalAddOn;
+      entry.model = originalModel;
+    }
+    expect(order).toEqual(["addOn", "model"]);
   });
 });
 

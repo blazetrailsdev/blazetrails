@@ -98,7 +98,7 @@ export const SKIP_ATTRS: Readonly<Record<string, ReadonlySet<string>>> = {
 };
 
 // prettier-ignore
-interface FileResult { yamlBase: string; tsBase: string | null; status: Status; rowsMatched: number; rowsTotal: number; attrsMatched: number; attrsTotal: number; attrsSkipped: number; schemaPorted: boolean; schemaExtras: number; notes: string[]; }
+interface FileResult { yamlPath: string; tsBase: string | null; status: Status; rowsMatched: number; rowsTotal: number; attrsMatched: number; attrsTotal: number; attrsSkipped: number; schemaPorted: boolean; schemaExtras: number; notes: string[]; }
 
 // Sentinel substituted for opaque `<%= ... %>` output expressions we can't
 // reduce (e.g. `<%= 2.weeks.ago.to_fs(:db) %>`, `<%= binary(...) %>`). The
@@ -106,9 +106,11 @@ interface FileResult { yamlBase: string; tsBase: string | null; status: Status; 
 // the rest of the file comparable instead of dropping it as ERB-UNSUPPORTED.
 export const ERB_SKIP_SENTINEL = "__ERB_SKIP__";
 
-// Baseline locked at PR #2712 (93% milestone). Bump match when new fixtures
-// are ported; bump diff only for intentional accepted drifts. missing must stay 0.
-const CI_BASELINE = { match: 113, diff: 6, missing: 0 } as const;
+// Baseline locked at PR #2715 (93% milestone) + updated for recursive subdir scan
+// (Phase 1 of the subdir-fixtures plan). The 24 subdir YAMLs have no TS counterparts
+// yet; Phases 2-5 will progressively close them. Bump match when new fixtures are ported;
+// bump diff only for intentional accepted drifts.
+const CI_BASELINE = { match: 113, diff: 6, missing: 24 } as const;
 
 function parseArgs(argv: string[]): {
   pkg: string;
@@ -588,11 +590,11 @@ export function canonicalizeRailsRow(railsRow: Row, tsRow: Row, columns: Set<str
 }
 
 // prettier-ignore
-export async function compareFile(yamlBase: string, yamlByTable: Map<string, FixtureMap>, idIndex: Map<string, Map<number, string[]>>, prelimFailure: Status | undefined, schema: Schema = TEST_SCHEMA): Promise<FileResult> {
-  const snake = yamlBase.replace(/\.yml$/, "");
+export async function compareFile(yamlPath: string, yamlByTable: Map<string, FixtureMap>, idIndex: Map<string, Map<number, string[]>>, prelimFailure: Status | undefined, schema: Schema = TEST_SCHEMA): Promise<FileResult> {
+  const snake = yamlPath.replace(/\.yml$/, "");
   const tsFile = path.join(TS_DIR, `${kebab(snake)}.ts`);
   const tsBase = existsSync(tsFile) ? `${kebab(snake)}.ts` : null;
-  const r: FileResult = { yamlBase, tsBase, status: "MATCH", rowsMatched: 0, rowsTotal: 0, attrsMatched: 0, attrsTotal: 0, attrsSkipped: 0, schemaPorted: false, schemaExtras: 0, notes: [] }; // prettier-ignore
+  const r: FileResult = { yamlPath, tsBase, status: "MATCH", rowsMatched: 0, rowsTotal: 0, attrsMatched: 0, attrsTotal: 0, attrsSkipped: 0, schemaPorted: false, schemaExtras: 0, notes: [] }; // prettier-ignore
   if (prelimFailure) {
     // For ERB-ALLOWED files the TS side is the source of truth, so confirm
     // the TS counterpart actually exists before silently promoting — if
@@ -696,7 +698,7 @@ function formatLine(r: FileResult): string {
         ? `schema:extras=${r.schemaExtras}`
         : "schema:ok";
   return (
-    r.yamlBase.padEnd(32) +
+    r.yamlPath.padEnd(40) +
     (r.tsBase ?? "(missing)").padEnd(28) +
     `rows: ${r.rowsMatched}/${r.rowsTotal}`.padEnd(14) +
     `attrs: ${r.attrsMatched}/${r.attrsTotal}${r.attrsSkipped ? ` (+${r.attrsSkipped} skipped)` : ""}`.padEnd(
@@ -708,6 +710,20 @@ function formatLine(r: FileResult): string {
   );
 }
 
+/** Recursively collects `.yml` paths under `dir`, returning paths relative to `dir` (sorted). */
+function collectYamlPaths(dir: string, prefix: string = ""): string[] {
+  const result: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      result.push(...collectYamlPaths(path.join(dir, entry.name), rel));
+    } else if (entry.name.endsWith(".yml")) {
+      result.push(rel);
+    }
+  }
+  return result.sort();
+}
+
 async function main(): Promise<void> {
   const { pkg, filter, models, incomplete, ci } = parseArgs(process.argv.slice(2));
   if (pkg !== "activerecord") {
@@ -715,17 +731,18 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  const allYamls = readdirSync(YML_DIR)
-    .filter((f) => f.endsWith(".yml"))
-    .sort();
+  const allYamls = collectYamlPaths(YML_DIR);
   const yamlFiles = filter ? allYamls.filter((f) => f.includes(filter)) : allYamls;
 
   // Parse every YAML so the id index is complete even when --filter narrows the per-file pass.
+  // Keys are path-relative (e.g. "accounts" or "admin/accounts"); basenames are file-only for
+  // list-form auto-labeling (Rails' auto_named_fixtures uses the last path component).
   const yamlByTable = new Map<string, FixtureMap>();
   const prelim = new Map<string, Status>();
   for (const f of allYamls) {
     const snake = f.replace(/\.yml$/, "");
-    const loaded = loadRailsYaml(path.join(YML_DIR, f), snake);
+    const basename = path.basename(f).replace(/\.yml$/, "");
+    const loaded = loadRailsYaml(path.join(YML_DIR, f), basename);
     if (loaded.ok) yamlByTable.set(snake, loaded.data);
     else prelim.set(snake, loaded.reason);
   }

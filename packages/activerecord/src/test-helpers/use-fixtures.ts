@@ -195,6 +195,13 @@ function isTableMissingError(e: unknown): boolean {
  * authors("david"); // → Author instance
  * ```
  *
+ * Subdirectory fixture sets use slash-keyed names; access via bracket notation:
+ *
+ * ```ts
+ * const fixtures = useFixtures(["admin/accounts"], () => adapter);
+ * fixtures["admin/accounts"]("david"); // → Admin::Account instance
+ * ```
+ *
  * Pass `{ schema }` to skip the manual `defineSchema` step: `useFixtures` derives the
  * minimal sub-schema for the requested sets (see {@link deriveFixtureSchema}) and
  * creates those tables in a `beforeAll`. Hand it the whole `TEST_SCHEMA` and it picks

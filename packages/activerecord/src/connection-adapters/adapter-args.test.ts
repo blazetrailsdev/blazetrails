@@ -94,6 +94,16 @@ describe("buildAdapterArg", () => {
       expect(config.host).toBeUndefined();
     });
 
+    it("treats empty socket as absent and falls back to localhost for mysql", () => {
+      const [config] = buildAdapterArg("mysql2", {
+        adapter: "mysql2",
+        database: "db",
+        socket: "",
+      }) as [Record<string, unknown>];
+      expect(config.socketPath).toBeUndefined();
+      expect(config.host).toBe("localhost");
+    });
+
     it("does not remap socketPath when already set for mysql", () => {
       const [config] = buildAdapterArg("mysql2", {
         adapter: "mysql2",

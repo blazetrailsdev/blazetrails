@@ -75,6 +75,16 @@ describe("test-fixture-parity rule", () => {
           filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
           code: `const fx = useFixtures(["customers"], () => conn); describe("T", () => { it("find single value object", () => {}); });`,
         },
+        {
+          name: "useFixtures in outer describe satisfies it() in nested describe",
+          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+          code: `describe("Outer", () => { useFixtures(["customers"], () => conn); describe("Inner", () => { it("find single value object", () => {}); }); });`,
+        },
+        {
+          name: "describe.only is recognized as a describe scope",
+          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+          code: `describe.only("T", () => { useFixtures(["customers"], () => conn); it("find single value object", () => {}); });`,
+        },
       ],
       invalid: [
         {

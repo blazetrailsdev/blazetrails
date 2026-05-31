@@ -49,26 +49,31 @@ function normalizeDesc(s) {
   return s.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+/** Returns true for `describe`, `describe.only`, `describe.skip`, etc. */
+function isDescribeCallee(callee) {
+  if (callee?.type === "Identifier") return callee.name === "describe";
+  if (callee?.type === "MemberExpression") return callee.object?.name === "describe";
+  return false;
+}
+
 /**
- * Walk up parent chain to find the BlockStatement body of the nearest
- * enclosing `describe(...)` call. Returns null if none found.
+ * Walk up the parent chain collecting ALL enclosing describe BlockStatement
+ * bodies, from innermost to outermost. Empty array = node is at file scope.
+ * Handles describe / describe.only / describe.skip / describe.skipIf(...)(...).
  */
-function enclosingDescribeBody(node) {
+function allEnclosingDescribeBodies(node) {
+  const bodies = [];
   let cur = node.parent;
   while (cur) {
-    if (
-      cur.type === "CallExpression" &&
-      cur.callee?.type === "Identifier" &&
-      cur.callee?.name === "describe"
-    ) {
+    if (cur.type === "CallExpression" && isDescribeCallee(cur.callee)) {
       const cb = cur.arguments[cur.arguments.length - 1];
       if (cb && (cb.type === "ArrowFunctionExpression" || cb.type === "FunctionExpression")) {
-        if (cb.body?.type === "BlockStatement") return cb.body;
+        if (cb.body?.type === "BlockStatement") bodies.push(cb.body);
       }
     }
     cur = cur.parent;
   }
-  return null;
+  return bodies;
 }
 
 const FIXTURE_CALLEE_NAMES = new Set(["useFixtures", "useHandlerTransactionalFixtures"]);
@@ -107,8 +112,11 @@ const rule = {
         if (!calleeName) return;
 
         if (FIXTURE_CALLEE_NAMES.has(calleeName)) {
-          const body = enclosingDescribeBody(node);
-          describeBodiesWithFixtures.add(body); // null = file scope
+          const ancestors = allEnclosingDescribeBodies(node);
+          // null = file scope; a non-empty ancestors list means the nearest
+          // describe body is ancestors[0] — add it so nested it() checks can
+          // match by walking their own ancestor chain.
+          describeBodiesWithFixtures.add(ancestors.length > 0 ? ancestors[0] : null);
           return;
         }
 
@@ -117,17 +125,17 @@ const rule = {
           if (firstArg?.type !== "Literal" || typeof firstArg.value !== "string") return;
           const desc = normalizeDesc(firstArg.value);
           if (!fixtureDescs.has(desc)) return;
-          const body = enclosingDescribeBody(node);
-          toCheck.push({ node: firstArg, desc, body });
+          toCheck.push({ node: firstArg, desc, ancestors: allEnclosingDescribeBodies(node) });
         }
       },
 
       "Program:exit"() {
-        // null in the set means useFixtures was called at file scope — it covers
-        // all tests in the file regardless of their describe nesting.
+        // null in the set means useFixtures was called at file scope — covers all tests.
         if (describeBodiesWithFixtures.has(null)) return;
-        for (const { node, desc, body } of toCheck) {
-          if (!describeBodiesWithFixtures.has(body)) {
+        for (const { node, desc, ancestors } of toCheck) {
+          // Check if any ancestor describe (from innermost outward) has a fixture call.
+          const covered = ancestors.some((b) => describeBodiesWithFixtures.has(b));
+          if (!covered) {
             context.report({ node, messageId: "missing", data: { desc } });
           }
         }

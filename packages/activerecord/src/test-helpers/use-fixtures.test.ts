@@ -684,19 +684,20 @@ describe("useFixtures bootstraps the encryption add-on for encrypted fixtures", 
   // EncryptedBook calls `encrypts("name", { deterministic: true })` in a static
   // block, which throws at import unless the encryption add-on registered its
   // hooks first. The registry entry's `addOn` runs before the model thunk and
-  // bootstraps it. The fixture row stores plaintext (Rails fixture parity), so
-  // the encrypted attribute reads back as the expected plaintext.
+  // bootstraps it. The fixture row seeds as cleartext (see the EncryptedFixtures
+  // parity note in fixtures-registry.ts) and `supportUnencryptedData` lets the
+  // encrypted attribute read it back as the expected plaintext.
   const { encryptedBooks } = useFixtures(["encryptedBooks"], () => Base.adapter);
   const { encryptedBookThatIgnoresCases } = useFixtures(
     ["encryptedBookThatIgnoresCases"],
     () => Base.adapter,
   );
 
-  it("round-trips the encrypted name attribute to its plaintext", () => {
+  it("reads the encrypted name attribute back as its expected plaintext", () => {
     expect(encryptedBooks("awdr").readAttribute("name")).toBe("Agile Web Development with Rails");
   });
 
-  it("round-trips an ignore-case encrypted fixture", () => {
+  it("reads an ignore-case encrypted fixture back as plaintext", () => {
     expect(encryptedBookThatIgnoresCases("rfr").readAttribute("name")).toBe("Ruby for Rails");
   });
 });

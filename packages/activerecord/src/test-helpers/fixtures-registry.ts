@@ -33,9 +33,18 @@ export interface FixtureModelEntry {
  * Bootstraps the encryption add-on so the `EncryptedBook*` models import cleanly.
  * Importing `encryption/test-helpers.js` triggers the `../encryption.js` side
  * effect that registers `Base.encrypts`' hooks, then configures the shared test
- * key material. `supportUnencryptedData` is enabled so the plaintext fixture rows
- * round-trip through the encrypted attribute type (Rails fixtures store plaintext
- * unless `encrypt_fixtures` is set).
+ * key material with `supportUnencryptedData` enabled.
+ *
+ * Fidelity note: Rails' encryption test cases prepend
+ * `ActiveRecord::Encryption::EncryptedFixtures` onto `ActiveRecord::Fixture`,
+ * which encrypts encrypted attributes at load time (`type.serialize(clean)`) so
+ * the column stores ciphertext. trails decorates encrypted attribute types
+ * lazily (at instance-attribute build, not on `typeForAttribute`), so a
+ * fixture-load `serialize()` against the schema-reflected `EncryptedBook` model
+ * still returns cleartext — encrypt-at-rest for fixtures needs a separate change
+ * to the decoration timing. Until then the rows seed as cleartext and
+ * `supportUnencryptedData` lets the encrypted attribute read them back, which is
+ * a supported Rails mode. See the EncryptedFixtures parity follow-up.
  *
  * @internal
  */

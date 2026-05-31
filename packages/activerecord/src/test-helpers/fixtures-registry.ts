@@ -121,8 +121,36 @@ export function isJoinTableEntry(e: FixtureRegistryEntry): e is FixtureJoinTable
  *   `developers` set has a `shared_computers` non-column gap, listed above). Re-add once
  *   `developers` is registerable. The other three HABTM join sets (`categories-posts`,
  *   `parrots-pirates`, `peoples-treasures`) ref only loadable model sets and ARE registered.
+ *
+ * Subdirectory fixture-set gaps (4 admin sets ported in Phase 3; remaining phases below):
+ * - Phase 2 (`reserved_words/`) — needs model-less loader extension; inline Rails test
+ *   classes have no shared model files.
+ * - Phase 4 (`categories/` + `to_be_linked/`), Phase 5 (`primary_key_error/`),
+ *   Phase 6 (`all/` + `naked/yml/`) — follow-up PRs.
  */
 export const fixtureRegistry = {
+  "admin/accounts": {
+    model: () => import("./models/admin/account.js").then((m) => m.AdminAccount),
+    data: FixtureData.adminAccountsFixtureData,
+  },
+  "admin/randomlyNamedA9": {
+    model: () =>
+      import("./models/admin/randomly-named-c1.js").then(
+        (m) => m.AdminClassNameThatDoesNotFollowCONVENTIONS1,
+      ),
+    data: FixtureData.adminRandomlyNamedA9FixtureData,
+  },
+  "admin/randomlyNamedB0": {
+    model: () =>
+      import("./models/admin/randomly-named-c1.js").then(
+        (m) => m.AdminClassNameThatDoesNotFollowCONVENTIONS2,
+      ),
+    data: FixtureData.adminRandomlyNamedB0FixtureData,
+  },
+  "admin/users": {
+    model: () => import("./models/admin/user.js").then((m) => m.AdminUser),
+    data: FixtureData.adminUsersFixtureData,
+  },
   accounts: {
     model: () => import("./models/account.js").then((m) => m.Account),
     data: FixtureData.accountFixtureData,

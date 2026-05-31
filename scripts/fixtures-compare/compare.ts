@@ -107,10 +107,10 @@ interface FileResult { yamlPath: string; tsBase: string | null; status: Status; 
 export const ERB_SKIP_SENTINEL = "__ERB_SKIP__";
 
 // Baseline locked at PR #2715 (93% milestone) + updated for recursive subdir scan
-// (Phase 1 of the subdir-fixtures plan). The 24 subdir YAMLs have no TS counterparts
-// yet; Phases 2-5 will progressively close them. Bump match when new fixtures are ported;
-// bump diff only for intentional accepted drifts.
-const CI_BASELINE = { match: 113, diff: 6, missing: 24 } as const;
+// (Phase 1 of the subdir-fixtures plan) + 4 admin fixtures ported in Phase 3.
+// Phases 2, 4-6 will close the remaining 20 subdir YAMLs. Bump match when new
+// fixtures are ported; bump diff only for intentional accepted drifts.
+const CI_BASELINE = { match: 117, diff: 6, missing: 20 } as const;
 
 function parseArgs(argv: string[]): {
   pkg: string;

@@ -37,7 +37,7 @@ describe("ArGenerateModelTest", () => {
     expect(src).toContain("t.timestamps()");
   });
 
-  it("model declares typed attributes and belongsTo for references", async () => {
+  it("model declares typed attributes, foreign key, and belongsTo in single static block", async () => {
     const result = await generateModel(
       dir,
       "Comment",
@@ -49,9 +49,13 @@ describe("ArGenerateModelTest", () => {
       1700000013000,
     );
     const src = await readFile(result.modelPath, "utf8");
-    expect(src).toContain('this.belongsTo("post")');
+    // foreign-key declaration (associations.test-d.ts pattern)
+    expect(src).toContain("declare post_id: number");
     expect(src).toContain("declare body: string");
     expect(src).toContain("declare score: number");
+    // single static {} block
+    expect(src).toContain('this.belongsTo("post")');
+    expect((src.match(/static\s*\{/g) ?? []).length).toBe(1);
   });
 
   it("handles CamelCase name via underscore conversion", async () => {

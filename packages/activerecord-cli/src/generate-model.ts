@@ -27,12 +27,21 @@ const TS_TYPES: Record<string, string> = {
 function renderModel(className: string, fields: FieldSpec[]): string {
   const refs = fields.filter((f) => f.type === "references" || f.type === "belongs_to");
   const cols = fields.filter((f) => f.type !== "references" && f.type !== "belongs_to");
-  const assocs = refs.map((f) => `  static { this.belongsTo("${f.name}"); }`).join("\n");
-  const attrs = cols.map((f) => `  declare ${f.name}: ${TS_TYPES[f.type] ?? "string"};`).join("\n");
-  const body = [assocs, attrs].filter(Boolean).join("\n");
+
+  // Foreign-key declarations for reference fields (e.g. post_id: number)
+  const fkAttrs = refs.map((f) => `  declare ${f.name}_id: number;`).join("\n");
+  const colAttrs = cols
+    .map((f) => `  declare ${f.name}: ${TS_TYPES[f.type] ?? "string"};`)
+    .join("\n");
+
+  // Single static {} block for all associations — matches the codebase convention
+  const assocCalls = refs.map((f) => `    this.belongsTo("${f.name}");`).join("\n");
+  const staticBlock = assocCalls ? `  static {\n${assocCalls}\n  }` : "";
+
+  const parts = [fkAttrs, colAttrs, staticBlock].filter(Boolean).join("\n");
   return (
     `import { Base } from "@blazetrails/activerecord";\n\n` +
-    `export class ${className} extends Base {${body ? `\n${body}\n` : ""}}\n`
+    `export class ${className} extends Base {${parts ? `\n${parts}\n` : ""}}\n`
   );
 }
 

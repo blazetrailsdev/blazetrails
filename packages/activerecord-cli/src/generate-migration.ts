@@ -23,7 +23,6 @@ export function parseFields(tokens: string[]): FieldSpec[] {
     .filter((t) => t.includes(":"))
     .map((t) => {
       const [name, rawType = "string"] = t.split(":");
-      // normalize empty type (e.g. "name:") to the default
       const type = rawType || "string";
       return { name, type };
     });
@@ -34,39 +33,61 @@ export function normalizeSnakeName(name: string): string {
   return underscore(name).replace(/\//g, "_");
 }
 
-// References/belongs_to fields are associations — they have no column-level equivalent
-// in the table definition. We skip them in the createTable body (they get a
-// belongs_to in the model file and the migration author can add add_reference manually).
-const SKIP_TABLE_TYPES = new Set(["references", "belongs_to"]);
+/** pluralize(underscore(x)) — mirrors Rails' `tableize`. */
+function tableize(name: string): string {
+  return pluralize(underscore(name));
+}
+
+function isReference(type: string): boolean {
+  return type === "references" || type === "belongs_to";
+}
 
 function renderBody(snakeName: string, fields: FieldSpec[]): string {
   let m: RegExpExecArray | null;
+
+  // add_*_to_* — tableize the captured segment so "add_email_to_user" → table "users"
   m = /^add_.*_to_(.+)$/.exec(snakeName);
   if (m) {
-    const tbl = m[1];
+    const tbl = tableize(m[1]);
     const cols = fields
-      .map((f) => `    await this.addColumn("${tbl}", "${f.name}", "${f.type}");`)
+      .map((f) =>
+        isReference(f.type)
+          ? `    await this.addReference("${tbl}", "${f.name}", { foreignKey: true });`
+          : `    await this.addColumn("${tbl}", "${f.name}", "${f.type}");`,
+      )
       .join("\n");
     return cols || `    // TODO: add columns to ${tbl}`;
   }
+
+  // remove_*_from_* — same tableize treatment
   m = /^remove_.*_from_(.+)$/.exec(snakeName);
   if (m) {
-    const tbl = m[1];
+    const tbl = tableize(m[1]);
     const cols = fields
-      .map((f) => `    await this.removeColumn("${tbl}", "${f.name}", "${f.type}");`)
+      .map((f) =>
+        isReference(f.type)
+          ? `    await this.removeReference("${tbl}", "${f.name}");`
+          : `    await this.removeColumn("${tbl}", "${f.name}", "${f.type}");`,
+      )
       .join("\n");
     return cols || `    // TODO: remove columns from ${tbl}`;
   }
+
+  // create_* — emit t.references(...) for reference fields (Rails template does the same)
   m = /^create_(.+)$/.exec(snakeName);
   if (m) {
     const tbl = pluralize(m[1]);
     const cols = fields
-      .filter((f) => !SKIP_TABLE_TYPES.has(f.type))
-      .map((f) => `      t.${f.type}("${f.name}");`)
+      .map((f) =>
+        isReference(f.type)
+          ? `      t.references("${f.name}", { foreignKey: true });`
+          : `      t.${f.type}("${f.name}");`,
+      )
       .join("\n");
     const inner = cols ? `\n${cols}\n      t.timestamps();\n    ` : "\n      t.timestamps();\n    ";
     return `    await this.createTable("${tbl}", (t) => {${inner}});`;
   }
+
   return "    // TODO: implement migration";
 }
 

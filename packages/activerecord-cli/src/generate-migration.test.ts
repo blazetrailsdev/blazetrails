@@ -17,15 +17,31 @@ describe("ArGenerateMigrationTest", () => {
     ]);
   });
 
-  it("renders add_*_to_* migration with addColumn calls", () => {
-    const src = renderMigration("add_name_to_users", [{ name: "name", type: "string" }]);
-    expect(src).toContain("export default class AddNameToUsers extends Migration");
+  it("renders add_*_to_* migration with addColumn calls; tableizes singular table segment", () => {
+    const src = renderMigration("add_name_to_user", [{ name: "name", type: "string" }]);
+    expect(src).toContain("export default class AddNameToUser extends Migration");
+    // table segment "user" → tableize → "users"
     expect(src).toContain('this.addColumn("users", "name", "string")');
   });
 
-  it("renders remove_*_from_* migration with removeColumn calls", () => {
-    const src = renderMigration("remove_age_from_people", [{ name: "age", type: "integer" }]);
+  it("renders add_*_to_* migration with addReference for references fields", () => {
+    const src = renderMigration("add_post_to_comments", [{ name: "post", type: "references" }]);
+    expect(src).toContain('this.addReference("comments", "post", { foreignKey: true })');
+    expect(src).not.toContain("addColumn");
+  });
+
+  it("renders remove_*_from_* migration with removeColumn calls; tableizes singular table segment", () => {
+    const src = renderMigration("remove_age_from_person", [{ name: "age", type: "integer" }]);
+    // "person" → "people"
     expect(src).toContain('this.removeColumn("people", "age", "integer")');
+  });
+
+  it("renders remove_*_from_* migration with removeReference for references fields", () => {
+    const src = renderMigration("remove_post_from_comments", [
+      { name: "post", type: "belongs_to" },
+    ]);
+    expect(src).toContain('this.removeReference("comments", "post")');
+    expect(src).not.toContain("removeColumn");
   });
 
   it("renders create_* migration with createTable block and timestamps", () => {
@@ -33,6 +49,12 @@ describe("ArGenerateMigrationTest", () => {
     expect(src).toContain('this.createTable("articles"');
     expect(src).toContain('t.string("title")');
     expect(src).toContain("t.timestamps()");
+  });
+
+  it("renders create_* migration with t.references for reference fields", () => {
+    const src = renderMigration("create_comments", [{ name: "post", type: "references" }]);
+    expect(src).toContain('t.references("post", { foreignKey: true })');
+    expect(src).not.toContain("t.references_id");
   });
 
   it("renders generic migration with TODO body", () => {

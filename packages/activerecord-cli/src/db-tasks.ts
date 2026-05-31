@@ -323,37 +323,32 @@ export async function dbMigrateStatus(cwd: string, args: string[]): Promise<numb
 
   const env = DatabaseConfigurations.currentEnv();
 
-  if (all) {
-    const configs = DatabaseTasks.eachLocalConfiguration();
-    for (const config of configs) {
-      const dbName = config.database ?? "(unknown)";
-      try {
-        await DatabaseTasks.withTemporaryPool(config, async () => {
-          const rows = await DatabaseTasks.migrateStatus();
-          printMigrateStatusTable(dbName, rows);
-        });
-      } catch (err) {
-        console.error(`ar: db:migrate:status failed for '${dbName}' — ${String(err)}`);
-        return 1;
-      }
-    }
-    return 0;
+  // Rails: `with_temporary_pool_for_each` (no name) iterates all configs for the env.
+  // --all extends this to every configured env/database.
+  const configs = all
+    ? (DatabaseTasks.databaseConfiguration?.configurations ?? [])
+    : DatabaseTasks.configsFor(env);
+
+  if (configs.length === 0) {
+    console.error(
+      all
+        ? "ar: no database configurations found"
+        : `ar: no database configuration found for environment "${env}"`,
+    );
+    return 1;
   }
 
-  const config = DatabaseTasks.configsFor(env)[0];
-  if (!config) {
-    console.error(`ar: no database configuration found for environment "${env}"`);
-    return 1;
+  for (const config of configs) {
+    const dbName = config.database ?? config.envName ?? "(unknown)";
+    try {
+      await DatabaseTasks.withTemporaryPool(config, async () => {
+        const rows = await DatabaseTasks.migrateStatus();
+        printMigrateStatusTable(dbName, rows);
+      });
+    } catch (err) {
+      console.error(`ar: db:migrate:status failed for '${dbName}' — ${String(err)}`);
+      return 1;
+    }
   }
-  const dbName = config.database ?? env;
-  try {
-    await DatabaseTasks.withTemporaryPool(config, async () => {
-      const rows = await DatabaseTasks.migrateStatus();
-      printMigrateStatusTable(dbName, rows);
-    });
-    return 0;
-  } catch (err) {
-    console.error(`ar: db:migrate:status failed — ${String(err)}`);
-    return 1;
-  }
+  return 0;
 }

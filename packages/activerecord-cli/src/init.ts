@@ -183,6 +183,11 @@ export interface InitOptions {
   overrides?: Record<string, string>;
   /** Driver peer to add to package.json (default: "better-sqlite3"). */
   driver?: string;
+  /**
+   * Skip all package.json management (creation and dep injection).
+   * Set by `ar new`, which writes its own package.json before calling init().
+   */
+  skipPackageJson?: boolean;
 }
 
 /**
@@ -194,31 +199,38 @@ export interface InitOptions {
  * fresh scaffold.
  */
 export async function init(root: string, opts: InitOptions = {}): Promise<InitResult> {
-  const { force = false, overrides = {}, driver = "better-sqlite3" } = opts;
+  const {
+    force = false,
+    overrides = {},
+    driver = "better-sqlite3",
+    skipPackageJson = false,
+  } = opts;
   const created: string[] = [];
   const skipped: string[] = [];
   let packageJsonUpdated: InitResult["packageJsonUpdated"];
 
-  const pkgPath = join(root, "package.json");
-  let pkgExists = false;
-  try {
-    await access(pkgPath);
-    pkgExists = true;
-  } catch {
-    // doesn't exist yet
-  }
+  if (!skipPackageJson) {
+    const pkgPath = join(root, "package.json");
+    let pkgExists = false;
+    try {
+      await access(pkgPath);
+      pkgExists = true;
+    } catch {
+      // doesn't exist yet
+    }
 
-  if (pkgExists && !force) {
-    const deps: Record<string, string> = {
-      ...AR_DEPS,
-      ...(INIT_DRIVER_DEPS[driver] ?? INIT_DRIVER_DEPS["better-sqlite3"]),
-    };
-    packageJsonUpdated = await addDepsToPackageJson(pkgPath, deps);
-  } else if (!pkgExists || force) {
-    const name = basename(root);
-    const body = freshPackageJson(name, driver);
-    await writeFile(pkgPath, body, { flag: force ? "w" : "wx" });
-    created.push("package.json");
+    if (pkgExists && !force) {
+      const deps: Record<string, string> = {
+        ...AR_DEPS,
+        ...(INIT_DRIVER_DEPS[driver] ?? INIT_DRIVER_DEPS["better-sqlite3"]),
+      };
+      packageJsonUpdated = await addDepsToPackageJson(pkgPath, deps);
+    } else {
+      const name = basename(root);
+      const body = freshPackageJson(name, driver);
+      await writeFile(pkgPath, body, { flag: force ? "w" : "wx" });
+      created.push("package.json");
+    }
   }
 
   for (const [rel, defaultBody] of SCAFFOLD) {

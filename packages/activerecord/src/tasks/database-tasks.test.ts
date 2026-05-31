@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -17,8 +17,8 @@ import { quoteTableName as mysqlQuoteTableName } from "../connection-adapters/my
 import { quoteTableName as abstractQuoteTableName } from "../connection-adapters/abstract/quoting.js";
 import { HashConfig } from "../database-configurations/hash-config.js";
 import { DatabaseConfigurations } from "../database-configurations.js";
-import { createSidecarTestAdapter } from "../test-adapter.js";
 import { NoDatabaseError } from "../errors.js";
+import { Base } from "../base.js";
 
 describe("DatabaseTasksCheckProtectedEnvironmentsTest", () => {
   it("raises an error when called with protected environment", async () => {
@@ -542,24 +542,27 @@ describe("DatabaseTasksDropCurrentThreeTierTest", () => {
 
 describe("DatabaseTasksMigrateTest", () => {
   let originalVersion: string | undefined;
-  beforeEach(() => {
+  beforeEach(async () => {
     originalVersion = process.env.VERSION;
+    await Base.establishConnection({ adapter: "sqlite3", database: ":memory:", pool: 1 });
   });
   afterEach(() => {
     if (originalVersion === undefined) delete process.env.VERSION;
     else process.env.VERSION = originalVersion;
     DatabaseTasks.registerMigrations([]);
-    DatabaseTasks.setAdapter(null);
+    try {
+      Base.removeConnection();
+    } catch {
+      /* no pool */
+    }
     DatabaseTasks.databaseConfiguration = null;
     DatabaseTasks.clearRegisteredTasks();
   });
 
   it("migrate set and unset empty values for verbose and version env vars", async () => {
-    const { adapter } = createSidecarTestAdapter();
-    DatabaseTasks.setAdapter(adapter);
     DatabaseTasks.registerTask("sqlite", { create: async () => {} });
     DatabaseTasks.databaseConfiguration = new DatabaseConfigurations({
-      development: { adapter: "sqlite3", database: "dev.db" },
+      development: { adapter: "sqlite3", database: ":memory:" },
     });
     let migrated = false;
     DatabaseTasks.registerMigrations([
@@ -583,6 +586,49 @@ describe("DatabaseTasksMigrateTest", () => {
     process.env.VERSION = "nonsense";
     await expect(DatabaseTasks.migrate()).rejects.toThrow(/Invalid format/);
   });
+
+  it("migrate routes each config to its own database in multi-db setup", async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-multidb-"));
+    const primaryDb = path.join(tmp, "primary.sqlite3");
+    const animalsDb = path.join(tmp, "animals.sqlite3");
+    DatabaseTasks.registerTask("sqlite", { create: async () => {} });
+    DatabaseTasks.databaseConfiguration = new DatabaseConfigurations({
+      development: {
+        primary: { adapter: "sqlite3", database: primaryDb },
+        animals: { adapter: "sqlite3", database: animalsDb },
+      },
+    });
+    // Empty migration set: migrateAll still creates schema_migrations in
+    // each database it connects to, proving per-config routing worked.
+    DatabaseTasks.registerMigrations([]);
+    // Re-establish the pool against the primary DB so _resolveAdapter uses it
+    // for the primary config; animals routes via withTemporaryConnection → _connectFor.
+    Base.removeConnection();
+    await Base.establishConnection({ adapter: "sqlite3", database: primaryDb, pool: 1 });
+    try {
+      await DatabaseTasks.migrateAll();
+      // Verify schema_migrations was created in both databases.
+      const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
+      for (const dbFile of [primaryDb, animalsDb]) {
+        const a = new SQLite3Adapter(dbFile);
+        try {
+          const rows = await a.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
+          );
+          expect(rows).toHaveLength(1);
+        } finally {
+          await (a as unknown as { close(): Promise<void> }).close();
+        }
+      }
+    } finally {
+      try {
+        Base.removeConnection();
+      } catch {
+        /* ignore */
+      }
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
 });
 
 // Covers the no-`setAdapter` resolution path added when DatabaseTasks moved
@@ -592,20 +638,18 @@ describe("DatabaseTasksMigrateTest", () => {
 // the rest of the suite exercises these call sites through `setAdapter`, so
 // this guards the pool fallback against regressing.
 describe("DatabaseTasks migration connection resolves from the pool without setAdapter", () => {
-  afterEach(async () => {
+  afterEach(() => {
     DatabaseTasks.setAdapter(null);
     DatabaseTasks.registerMigrations([]);
-    const { Base } = await import("../base.js");
     try {
-      (Base as unknown as { removeConnection?: () => void }).removeConnection?.();
+      Base.removeConnection();
     } catch {
-      // no pool established — nothing to tear down
+      /* no pool */
     }
   });
 
   it("leases from an established Base pool when no shim adapter is set", async () => {
     DatabaseTasks.setAdapter(null);
-    const { Base } = await import("../base.js");
     await Base.establishConnection({ adapter: "sqlite3", database: ":memory:", pool: 1 });
     DatabaseTasks.registerMigrations([]);
     // Reaches _migrationAdapter() -> Base.connectionPool().leaseConnection().
@@ -666,13 +710,12 @@ describe("DatabaseTasksMigrateErrorTest", () => {
 
   it("migrate clears schema cache afterward", async () => {
     const { SchemaCache } = await import("../connection-adapters/schema-cache.js");
-    const { adapter } = createSidecarTestAdapter();
     const originalVersion = process.env.VERSION;
     delete process.env.VERSION;
-    DatabaseTasks.setAdapter(adapter);
+    await Base.establishConnection({ adapter: "sqlite3", database: ":memory:", pool: 1 });
     DatabaseTasks.registerTask("sqlite", { create: async () => {} });
     DatabaseTasks.databaseConfiguration = new DatabaseConfigurations({
-      [DatabaseTasks.env]: { adapter: "sqlite3", database: "dev.db" },
+      [DatabaseTasks.env]: { adapter: "sqlite3", database: ":memory:" },
     });
     DatabaseTasks.registerMigrations([]);
     const clearSpy = vi.spyOn(SchemaCache.prototype, "clear");
@@ -683,7 +726,11 @@ describe("DatabaseTasksMigrateErrorTest", () => {
       clearSpy.mockRestore();
       if (originalVersion === undefined) delete process.env.VERSION;
       else process.env.VERSION = originalVersion;
-      DatabaseTasks.setAdapter(null);
+      try {
+        Base.removeConnection();
+      } catch {
+        /* no pool */
+      }
       DatabaseTasks.databaseConfiguration = null;
       DatabaseTasks.registerMigrations([]);
       DatabaseTasks.clearRegisteredTasks();
@@ -1119,10 +1166,18 @@ describe("DatabaseTasksLoadSchemaTsFormatTest", () => {
   const originalFormat = DatabaseTasks.schemaFormat;
   const originalRoot = DatabaseTasks.root;
 
-  afterEach(() => {
+  beforeAll(async () => {
+    await Base.establishConnection({ adapter: "sqlite3", database: ":memory:", pool: 1 });
+  });
+
+  afterAll(() => {
     DatabaseTasks.schemaFormat = originalFormat;
     DatabaseTasks.root = originalRoot;
-    DatabaseTasks.setAdapter(null);
+    try {
+      Base.removeConnection();
+    } catch {
+      /* no pool */
+    }
   });
 
   it("load schema imports the schema module for ts format", async () => {
@@ -1137,8 +1192,6 @@ describe("DatabaseTasksLoadSchemaTsFormatTest", () => {
         `}\n`,
     );
 
-    const { adapter } = createSidecarTestAdapter();
-    DatabaseTasks.setAdapter(adapter);
     DatabaseTasks.schemaFormat = "ts";
 
     try {
@@ -1170,16 +1223,15 @@ export default async function defineSchema(ctx) {
   fs.writeFileSync(${JSON.stringify(markerFile)}, "ok");
 }\n`,
     );
-    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
-    const adapter = new SQLite3Adapter(dbFile);
-    DatabaseTasks.setAdapter(adapter);
+    await Base.establishConnection({ adapter: "sqlite3", database: dbFile, pool: 1 });
     DatabaseTasks.schemaFormat = "ts";
     try {
-      const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
+      const config = new HashConfig("test", "primary", { adapter: "sqlite3", database: dbFile });
       await DatabaseTasks.loadSchema(config, "ts", schemaFile);
       // Schema was loaded:
       expect(fs.existsSync(markerFile)).toBe(true);
-      // schema_sha1 was stamped:
+      // schema_sha1 was stamped — verify via the pool connection.
+      const adapter = Base.connectionPool().leaseConnection();
       const { InternalMetadata } = await import("../internal-metadata.js");
       const metadata = new InternalMetadata(adapter);
       const storedSha1 = await metadata.get("schema_sha1");
@@ -1191,8 +1243,11 @@ export default async function defineSchema(ctx) {
       const expectedSha1 = createHash("sha1").update(contents).digest("hex");
       expect(storedSha1).toBe(expectedSha1);
     } finally {
-      DatabaseTasks.setAdapter(null);
-      await adapter.close();
+      try {
+        Base.removeConnection();
+      } catch {
+        /* ignore */
+      }
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
@@ -1204,15 +1259,14 @@ export default async function defineSchema(ctx) {
     const structureFile = path.join(tmp, "structure.sql");
     // Pre-populate a structure.sql with a simple table DDL.
     fs.writeFileSync(structureFile, "CREATE TABLE gadgets (id INTEGER PRIMARY KEY);\n");
-    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
     const { SQLiteDatabaseTasks } = await import("./sqlite-database-tasks.js");
     SQLiteDatabaseTasks.register();
-    const adapter = new SQLite3Adapter(dbFile);
-    DatabaseTasks.setAdapter(adapter);
+    await Base.establishConnection({ adapter: "sqlite3", database: dbFile, pool: 1 });
     try {
       const config = new HashConfig("test", "primary", { adapter: "sqlite3", database: dbFile });
       await DatabaseTasks.loadSchema(config, "sql", structureFile);
-      // Table was loaded:
+      // Table was loaded — verify via the pool connection.
+      const adapter = Base.connectionPool().leaseConnection();
       const rows = await adapter.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='gadgets'",
       );
@@ -1228,8 +1282,12 @@ export default async function defineSchema(ctx) {
         .digest("hex");
       expect(storedSha1).toBe(expected);
     } finally {
-      DatabaseTasks.setAdapter(null);
-      await adapter.close();
+      try {
+        Base.removeConnection();
+      } catch {
+        /* ignore */
+      }
+      DatabaseTasks.clearRegisteredTasks();
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
@@ -1239,10 +1297,9 @@ describe("DatabaseTasks dumpSchema respects schemaDump gating", () => {
   it("skips dump when config.schemaDump() returns false", async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-gate-"));
     const dbFile = path.join(tmp, "gate.sqlite3");
-    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
-    const adapter = new SQLite3Adapter(dbFile);
+    await Base.establishConnection({ adapter: "sqlite3", database: dbFile, pool: 1 });
+    const adapter = Base.connectionPool().leaseConnection();
     await adapter.executeMutation("CREATE TABLE items (id INTEGER PRIMARY KEY)");
-    DatabaseTasks.setAdapter(adapter);
     DatabaseTasks.schemaFormat = "ts";
     const originalDbDir = DatabaseTasks.dbDir;
     DatabaseTasks.dbDir = path.join(tmp, "db");
@@ -1256,8 +1313,11 @@ describe("DatabaseTasks dumpSchema respects schemaDump gating", () => {
       expect(fs.existsSync(path.join(tmp, "db", "schema.ts"))).toBe(false);
     } finally {
       DatabaseTasks.dbDir = originalDbDir;
-      DatabaseTasks.setAdapter(null);
-      await adapter.close();
+      try {
+        Base.removeConnection();
+      } catch {
+        /* ignore */
+      }
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   });

@@ -279,9 +279,28 @@ export class DatabaseTasks {
   }
 
   private static async _resolveAdapter(
-    _config: DatabaseConfig,
+    config: DatabaseConfig,
   ): Promise<import("../adapter.js").DatabaseAdapter | null> {
-    return this._migrationAdapter();
+    if (this._adapterInstance) return this._adapterInstance;
+    const { Base } = await import("../base.js");
+    let pool;
+    try {
+      pool = Base.connectionPool();
+    } catch (error) {
+      const { ConnectionNotDefined } = await import("../errors.js");
+      if (error instanceof ConnectionNotDefined) return null;
+      throw error;
+    }
+    // Multi-db: when the pool is connected to a different file-backed database
+    // than `config` requests, open a direct connection for `config`. In-memory
+    // pools (:memory:) always match any config — they exist solely to supply a
+    // shared connection for the test run and must not be bypassed. Per-config
+    // pool routing lands in full with withTemporaryPool (step 5).
+    const poolDb = pool.dbConfig.database;
+    if (config.database && poolDb && poolDb !== ":memory:" && config.database !== poolDb) {
+      return this._connectFor(config);
+    }
+    return pool.leaseConnection();
   }
 
   /**

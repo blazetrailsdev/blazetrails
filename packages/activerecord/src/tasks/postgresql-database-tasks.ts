@@ -104,9 +104,11 @@ export class PostgreSQLDatabaseTasks {
       }
       throw error;
     } finally {
-      // Always restore the pool to the target DB so Base is not left pointing
-      // at the postgres system DB after create() returns or throws.
-      if (!connectionAlreadyEstablished) await this.establishConnection();
+      // Always restore the pool to the target DB. Rails establish_connection at
+      // the end of create() is unconditional — it runs even when called as
+      // create(true) (from purge()), so the pool is always re-pointed at the
+      // target DB after create() finishes, regardless of success or failure.
+      await this.establishConnection();
     }
   }
 

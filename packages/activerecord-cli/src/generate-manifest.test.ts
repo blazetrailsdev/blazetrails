@@ -99,6 +99,29 @@ describe("ArGenerateManifestTest", () => {
     expect((await scanModels(dir)).map((e) => e.className)).toEqual(["User"]);
   });
 
+  it("does not follow an external parent that shares a name with a local base", async () => {
+    // A real local abstract base named ApplicationRecord...
+    await writeModel(
+      dir,
+      "application_record.ts",
+      `import { Base } from "@blazetrails/activerecord";\n` +
+        `export class ApplicationRecord extends Base {\n  static abstractClass = true;\n}\n`,
+    );
+    // ...must NOT be reached by a class extending a same-named *external* import.
+    await writeModel(
+      dir,
+      "widget.ts",
+      `import { ApplicationRecord } from "some-engine";\nexport class Widget extends ApplicationRecord {}\n`,
+    );
+    // ...while a class extending the *relative* local base is a real model.
+    await writeModel(
+      dir,
+      "gadget.ts",
+      `import { ApplicationRecord } from "./application_record.js";\nexport class Gadget extends ApplicationRecord {}\n`,
+    );
+    expect((await scanModels(dir)).map((e) => e.className)).toEqual(["Gadget"]);
+  });
+
   it("handles an empty models dir without dangling re-exports", async () => {
     const manifest = await buildManifest(dir);
     expect(manifest).toContain(`export const models = [] as const;`);

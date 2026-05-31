@@ -20,10 +20,18 @@ export interface ModelEntry {
   isDefault: boolean; // exported as `export default class` vs a named export
 }
 
+/**
+ * What a class's `extends` target resolves to in its declaring file:
+ * - `ar-base`: ActiveRecord's `Base` import → this class is a model root.
+ * - `follow`: a local/relative name → keep walking via `byName`.
+ * - `stop`: no superclass, or an external package import → not (by itself) a model.
+ */
+type ParentKind = "ar-base" | "follow" | "stop";
+
 interface ClassDecl {
   name: string;
   parent: string | undefined; // the `extends` target's identifier name, if any
-  parentIsArBase: boolean; // `extends` target is this file's `@blazetrails/activerecord` Base import
+  parentKind: ParentKind;
   isDefault: boolean;
   isAbstract: boolean;
   file: string;
@@ -89,26 +97,45 @@ function isAbstractModel(node: ts.ClassDeclaration): boolean {
   return node.members.some(memberMarksAbstract);
 }
 
+interface FileImports {
+  /** Locals bound to `@blazetrails/activerecord`'s `Base` (alias-aware). */
+  arBase: Set<string>;
+  /** Locals bound to any other non-relative (package) import. */
+  external: Set<string>;
+}
+
 /**
- * The local identifiers a file binds to `@blazetrails/activerecord`'s `Base`
- * export — e.g. `{ "Base" }` for `import { Base } from "..."`, or `{ "AR" }`
- * for `import { Base as AR } from "..."`. Used to confirm an `extends Base`
- * really targets ActiveRecord's Base and not a same-named class from elsewhere.
+ * Classify a file's imported identifiers so the inheritance walk can tell what
+ * an `extends X` actually targets. `arBase` are bindings of ActiveRecord's
+ * `Base` (`import { Base }` or `import { Base as AR }`). `external` are
+ * bindings of any other package import — a parent resolving to one of these
+ * must terminate the walk (it isn't a scanned local model), even if its name
+ * collides with a real model/abstract base elsewhere in `app/models`. Relative
+ * imports (`./x.js`) and same-file declarations are left out → followable.
  */
-function collectArBaseNames(sf: ts.SourceFile): Set<string> {
-  const out = new Set<string>();
+function collectImports(sf: ts.SourceFile): FileImports {
+  const arBase = new Set<string>();
+  const external = new Set<string>();
   for (const stmt of sf.statements) {
-    if (!ts.isImportDeclaration(stmt)) continue;
-    if (!ts.isStringLiteral(stmt.moduleSpecifier) || stmt.moduleSpecifier.text !== AR_PACKAGE) {
-      continue;
-    }
-    const named = stmt.importClause?.namedBindings;
-    if (!named || !ts.isNamedImports(named)) continue;
-    for (const el of named.elements) {
-      if ((el.propertyName ?? el.name).text === "Base") out.add(el.name.text);
+    if (!ts.isImportDeclaration(stmt) || !ts.isStringLiteral(stmt.moduleSpecifier)) continue;
+    const spec = stmt.moduleSpecifier.text;
+    const isRelative = spec.startsWith("./") || spec.startsWith("../");
+    const clause = stmt.importClause;
+    if (!clause) continue;
+    const bind = (local: string, original: string): void => {
+      if (spec === AR_PACKAGE && original === "Base") arBase.add(local);
+      else if (!isRelative) external.add(local);
+      // relative imports are followable, so they're intentionally untracked
+    };
+    if (clause.name) bind(clause.name.text, "default"); // `import Foo from ...`
+    const nb = clause.namedBindings;
+    if (nb && ts.isNamedImports(nb)) {
+      for (const el of nb.elements) bind(el.name.text, (el.propertyName ?? el.name).text);
+    } else if (nb && ts.isNamespaceImport(nb)) {
+      bind(nb.name.text, "*"); // `import * as Foo from ...`
     }
   }
-  return out;
+  return { arBase, external };
 }
 
 /** The identifier name of a class's `extends` clause, if it extends one. */
@@ -145,15 +172,21 @@ export async function scanModels(modelsDir: string): Promise<ModelEntry[]> {
   for (const file of files) {
     const text = await fs.readFile!(path.join(modelsDir, file), "utf8");
     const sf = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true);
-    const arBaseNames = collectArBaseNames(sf);
+    const imports = collectImports(sf);
     for (const stmt of sf.statements) {
       if (!ts.isClassDeclaration(stmt) || !stmt.name) continue;
       if (!hasModifier(stmt, ts.SyntaxKind.ExportKeyword)) continue;
       const parent = extendsName(stmt);
+      let parentKind: ParentKind = "stop";
+      if (parent !== undefined) {
+        if (imports.arBase.has(parent)) parentKind = "ar-base";
+        else if (imports.external.has(parent)) parentKind = "stop";
+        else parentKind = "follow"; // same-file declaration or relative import
+      }
       decls.push({
         name: stmt.name.text,
         parent,
-        parentIsArBase: parent !== undefined && arBaseNames.has(parent),
+        parentKind,
         isDefault: hasModifier(stmt, ts.SyntaxKind.DefaultKeyword),
         isAbstract: isAbstractModel(stmt),
         file,
@@ -173,18 +206,18 @@ export async function scanModels(modelsDir: string): Promise<ModelEntry[]> {
   }
 
   // A class is a model iff its `extends` chain reaches ActiveRecord's `Base`.
-  // The terminal step is `parentIsArBase` (an AR-Base import in the declaring
-  // file); otherwise we follow the parent name to the next local class. A
-  // parent that's neither resolves to no `byName` entry → not a model. `seen`
-  // guards cyclic declarations, `cache` memoizes the single-inheritance chain.
+  // `ar-base` terminates true; `follow` continues to the parent's local decl;
+  // `stop` (no parent, or an external import) terminates false — so a parent
+  // imported from another package never resolves to a same-named local model.
+  // `seen` guards cyclic declarations, `cache` memoizes the single chain.
   const cache = new Map<string, boolean>();
   function reachesBase(name: string, seen: Set<string>): boolean {
     const cached = cache.get(name);
     if (cached !== undefined) return cached;
     const decl = byName.get(name);
     let result: boolean;
-    if (!decl) result = false;
-    else if (decl.parentIsArBase) result = true;
+    if (!decl || decl.parentKind === "stop") result = false;
+    else if (decl.parentKind === "ar-base") result = true;
     else if (!decl.parent || seen.has(name)) result = false;
     else {
       seen.add(name);

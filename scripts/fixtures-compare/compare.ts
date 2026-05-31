@@ -406,6 +406,14 @@ export function compareValue(tsVal: unknown, railsVal: unknown, attr: string, id
   if (Array.isArray(tsVal) && Array.isArray(railsVal)
     && tsVal.length === railsVal.length && tsVal.every((v, i) => v === railsVal[i]))
     return true;
+  // Plain-object columns (store/serialize hash values): Rails YAML carries a
+  // nested hash; compare via JSON round-trip so symbol-keyed hashes
+  // (e.g. `{":symbol": "symbol"}`) that are structurally identical don't DIFF.
+  if (
+    tsVal !== null && typeof tsVal === "object" && !Array.isArray(tsVal) &&
+    railsVal !== null && typeof railsVal === "object" && !Array.isArray(railsVal) &&
+    JSON.stringify(tsVal) === JSON.stringify(railsVal)
+  ) return true;
   // Datetime tolerance: round to second-precision since Rails fixtures often
   // carry sub-second fractions the TS side trims when materializing values.
   const tsT = normalizeDatetime(tsVal);

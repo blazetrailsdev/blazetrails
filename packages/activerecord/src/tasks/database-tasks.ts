@@ -276,9 +276,12 @@ export class DatabaseTasks {
       // `version` is the *method parameter* (explicit arg), NOT ENV["VERSION"].
       // The rake task always calls migrate() with no arg, so version is nil → scope filter only.
       // The exact-version branch fires only for explicit migrate(version) callers (migrate:up/down).
+      // Normalize version the same way Rails does `version.blank?`: treat "", " " as nil.
+      const explicitVersion =
+        version == null ? null : typeof version === "string" ? version.trim() || null : version;
       let filter: ((m: import("../migration.js").MigrationProxy) => boolean) | undefined;
-      if (version !== undefined && version !== null) {
-        const versionKey = String(BigInt(version));
+      if (explicitVersion !== null) {
+        const versionKey = String(BigInt(explicitVersion));
         filter = (m) => String(BigInt(m.version)) === versionKey;
       } else if (scope !== undefined && scope.trim() !== "") {
         filter = (m) => m.scope === scope;

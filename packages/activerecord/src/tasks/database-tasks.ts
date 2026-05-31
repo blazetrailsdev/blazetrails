@@ -9,6 +9,7 @@ import { DatabaseConfigurations } from "../database-configurations.js";
 import { ProtectedEnvironmentError } from "../migration.js";
 import type { ConnectionPool } from "../connection-adapters/abstract/connection-pool.js";
 import { getFs, getPath, getCryptoAsync, getOs, getEnv } from "@blazetrails/activesupport";
+import { ConnectionNotDefined } from "../errors.js";
 
 /**
  * Raised when a database task is invoked against an adapter that
@@ -261,11 +262,11 @@ export class DatabaseTasks {
     // "database unknown on either side" means a URL-only config or no database
     // restriction — treat as matching so the established pool is reused.
     const { Base } = await import("../base.js");
+    this._baseClass = Base;
     let pool: ConnectionPool | undefined;
     try {
       pool = Base.connectionPool();
     } catch (error) {
-      const { ConnectionNotDefined } = await import("../errors.js");
       if (!(error instanceof ConnectionNotDefined)) throw error;
       // No pool — fall through to withTemporaryConnection.
     }
@@ -437,6 +438,7 @@ export class DatabaseTasks {
 
     const envName = this._normalizeEnv(environment);
     const { Base } = await import("../base.js");
+    this._baseClass = Base;
     const protectedEnvs = Base.protectedEnvironments ?? ["production"];
 
     // Include hidden / `databaseTasks: false` / replica configs so the
@@ -903,7 +905,6 @@ export class DatabaseTasks {
     try {
       priorConfig = Base.connectionDbConfig();
     } catch (error) {
-      const { ConnectionNotDefined } = await import("../errors.js");
       if (!(error instanceof ConnectionNotDefined)) throw error;
     }
     // Mirrors Rails' `ensure` which restores even if establish_connection raises.
@@ -944,6 +945,7 @@ export class DatabaseTasks {
 
   static async migrationClass(): Promise<typeof import("../base.js").Base> {
     const { Base } = await import("../base.js");
+    this._baseClass = Base;
     return Base;
   }
 
@@ -951,13 +953,15 @@ export class DatabaseTasks {
     if (!this._baseClass) return null;
     try {
       return this._baseClass.connectionPool().leaseConnection();
-    } catch {
-      return null;
+    } catch (error) {
+      if (error instanceof ConnectionNotDefined) return null;
+      throw error;
     }
   }
 
   static async migrationConnectionPool(): Promise<ConnectionPool | null> {
     const { Base } = await import("../base.js");
+    this._baseClass = Base;
     const fn = (Base as unknown as { connectionPool?: () => ConnectionPool }).connectionPool;
     return fn ? fn.call(Base) : null;
   }
@@ -976,7 +980,6 @@ export class DatabaseTasks {
     try {
       adapter = await this._migrationAdapter();
     } catch (error) {
-      const { ConnectionNotDefined } = await import("../errors.js");
       if (error instanceof ConnectionNotDefined) return false;
       throw error;
     }
@@ -1017,7 +1020,6 @@ export class DatabaseTasks {
     try {
       adapter = await this._migrationAdapter();
     } catch (error) {
-      const { ConnectionNotDefined } = await import("../errors.js");
       if (error instanceof ConnectionNotDefined) return;
       throw error;
     }

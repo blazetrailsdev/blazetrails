@@ -932,8 +932,14 @@ export class DatabaseTasks {
     }
 
     for (const config of configs) {
-      await this.withTemporaryConnection(config, async () => {
-        await this.migrate();
+      await this.withTemporaryPool(config, async (pool) => {
+        const effectiveVersion = this.targetVersion();
+        this.checkTargetVersion(effectiveVersion ?? undefined);
+        const { Migrator } = await import("../migration.js");
+        const adapter = pool.leaseConnection();
+        const migrator = new Migrator(adapter, this._migrations);
+        await migrator.migrate(effectiveVersion ?? null);
+        adapter.schemaCache?.clear();
       });
     }
   }
@@ -971,20 +977,47 @@ export class DatabaseTasks {
     return result;
   }
 
+  /**
+   * Mirrors Rails' `DatabaseTasks.with_temporary_pool`: establishes a fresh
+   * pool for `config` (clobber: true), yields it, then restores the prior
+   * pool (or removes the pool if none existed before).
+   *
+   * @internal
+   */
+  static async withTemporaryPool<T>(
+    config: DatabaseConfig,
+    fn: (pool: ConnectionPool) => Promise<T>,
+  ): Promise<T> {
+    const { Base } = await import("../base.js");
+    let priorConfig: DatabaseConfig | null = null;
+    try {
+      priorConfig = Base.connectionDbConfig();
+    } catch (error) {
+      const { ConnectionNotDefined } = await import("../errors.js");
+      if (!(error instanceof ConnectionNotDefined)) throw error;
+    }
+    await Base.establishConnection(config.configuration as Record<string, unknown>);
+    const pool = Base.connectionPool();
+    try {
+      return await fn(pool);
+    } finally {
+      if (priorConfig !== null) {
+        await Base.establishConnection(priorConfig.configuration as Record<string, unknown>);
+      } else {
+        try {
+          Base.removeConnection();
+        } catch {
+          // No pool to remove
+        }
+      }
+    }
+  }
+
   static async withTemporaryConnection<T>(
     config: DatabaseConfig,
     fn: (adapter: import("../adapter.js").DatabaseAdapter) => Promise<T>,
   ): Promise<T> {
-    const adapter = await this._connectFor(config);
-    const previous = this._adapterInstance;
-    this._adapterInstance = adapter;
-    try {
-      return await fn(adapter);
-    } finally {
-      this._adapterInstance = previous;
-      const close = (adapter as { close?: () => Promise<void> }).close;
-      if (typeof close === "function") await close.call(adapter);
-    }
+    return this.withTemporaryPool(config, (pool) => fn(pool.leaseConnection()));
   }
 
   static async withTemporaryPoolForEach<T>(
@@ -992,7 +1025,7 @@ export class DatabaseTasks {
     fn: (config: DatabaseConfig) => Promise<T>,
   ): Promise<void> {
     for (const config of this.configsFor(envName)) {
-      await this.withTemporaryConnection(config, async () => {
+      await this.withTemporaryPool(config, async () => {
         await fn(config);
       });
     }
@@ -1329,8 +1362,7 @@ export async function checkCurrentProtectedEnvironmentBang(
 
 /** @internal */
 export async function initializeDatabase(dbConfig: DatabaseConfig): Promise<boolean> {
-  return DatabaseTasks.withTemporaryConnection(dbConfig, async () => {
-    const adapter = DatabaseTasks.migrationConnection()!;
+  return DatabaseTasks.withTemporaryConnection(dbConfig, async (adapter) => {
     const { NoDatabaseError } = await import("../errors.js");
     const { SchemaMigration } = await import("../schema-migration.js");
     let alreadyInitialized = false;

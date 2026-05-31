@@ -155,7 +155,8 @@ describe("detectPackageManager", () => {
     expect(await detectPackageManager(root)).toBe("bun");
   });
 
-  it("returns npm as fallback when no lockfile is found", async () => {
+  it("returns npm when package-lock.json is present", async () => {
+    await writeFile(join(root, "package-lock.json"), "", "utf8");
     expect(await detectPackageManager(root)).toBe("npm");
   });
 

@@ -19,7 +19,6 @@ function makeReplStub() {
 
 async function scaffoldProject(dir: string) {
   await mkdir(join(dir, "config"), { recursive: true });
-  // "development"-only config; tests pass --env test so no connection is attempted.
   await writeFile(
     join(dir, "config", "database.ts"),
     `export default { development: { adapter: "sqlite3", database: ":memory:" } };\n`,
@@ -44,7 +43,6 @@ describe("ArConsoleTest", () => {
   it("launches REPL, puts Base in context, resolves 0 on exit", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ar-console-"));
     await scaffoldProject(dir);
-
     const stub = makeReplStub();
     const code = await arConsole(dir, ["--env", "test"], { startRepl: () => stub });
     expect(code).toBe(0);

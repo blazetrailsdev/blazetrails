@@ -57,7 +57,7 @@ export async function arConsole(
       try {
         Base.removeConnection();
       } catch {
-        /* pool may already be gone */
+        // pool may already be gone
       }
       res(0);
     });

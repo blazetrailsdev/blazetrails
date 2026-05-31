@@ -3300,12 +3300,12 @@ export class Migrator {
     // MigrationContext#last_stored_environment short-circuits on
     // `internal_metadata.enabled?` before the table_exists? read.
     if (!this._internalMetadata.enabled) return null;
-    // Rails: return null when no migrations have been applied yet.
-    if ((await this.currentVersionReadOnly()) === 0) return null;
-    // Migrations present — metadata table must exist and carry an env stamp.
     const noEnvMsg =
       "Environment data not found in the schema. To resolve this issue, run: bin/rails db:environment:set";
     if (!(await this._internalMetadata.tableExists())) {
+      // Rails: return nil when current_version == 0 (no migrations applied yet).
+      // When migrations are present but the metadata table is absent, raise.
+      if ((await this.currentVersionReadOnly()) === 0) return null;
       throw new NoEnvironmentInSchemaError(noEnvMsg);
     }
     const environment = await this._internalMetadata.get("environment");

@@ -20,21 +20,27 @@ export interface ModelEntry {
   isDefault: boolean; // exported as `export default class` vs a named export
 }
 
-/**
- * What a class's `extends` target resolves to in its declaring file:
- * - `ar-base`: ActiveRecord's `Base` import → this class is a model root.
- * - `follow`: a local/relative name → keep walking via `byName`.
- * - `stop`: no superclass, or an external package import → not (by itself) a model.
- */
-type ParentKind = "ar-base" | "follow" | "stop";
-
-interface ClassDecl {
+interface ClassNode {
   name: string;
   parent: string | undefined; // the `extends` target's identifier name, if any
-  parentKind: ParentKind;
-  isDefault: boolean;
+  isExported: boolean;
+  isDefault: boolean; // `export default class`
   isAbstract: boolean;
+}
+
+/** A relative import binding: `local` → the original name in target `file`. */
+interface RelativeImport {
+  original: string; // the imported export's name, or "default"
+  file: string; // resolved target filename within the scan dir, e.g. `user.ts`
+}
+
+/** Everything the inheritance walk needs about one scanned model file. */
+interface FileInfo {
   file: string;
+  classes: Map<string, ClassNode>; // ALL classes declared here (exported or not), by name
+  arBase: Set<string>; // locals bound to `@blazetrails/activerecord`'s Base
+  external: Set<string>; // locals bound to a package (non-relative) import
+  relative: Map<string, RelativeImport>; // locals bound to a relative import
 }
 
 /** Source files we never treat as models: the manifest itself and tests. */
@@ -97,45 +103,56 @@ function isAbstractModel(node: ts.ClassDeclaration): boolean {
   return node.members.some(memberMarksAbstract);
 }
 
-interface FileImports {
-  /** Locals bound to `@blazetrails/activerecord`'s `Base` (alias-aware). */
-  arBase: Set<string>;
-  /** Locals bound to any other non-relative (package) import. */
-  external: Set<string>;
+/**
+ * Resolve a relative import specifier to a scanned filename. Only same-dir
+ * `./<name>.(js|ts)` is resolvable — the scan is a flat directory, so nested
+ * (`./sub/x.js`) or parent (`../x.js`) targets aren't part of it and stop the
+ * walk. ESM specifiers carry `.js`; the on-disk source is `.ts`.
+ */
+function resolveRelativeFile(specifier: string): string | undefined {
+  const m = /^\.\/([^/]+)\.(?:js|ts)$/.exec(specifier);
+  return m ? `${m[1]}.ts` : undefined;
 }
 
 /**
- * Classify a file's imported identifiers so the inheritance walk can tell what
- * an `extends X` actually targets. `arBase` are bindings of ActiveRecord's
- * `Base` (`import { Base }` or `import { Base as AR }`). `external` are
- * bindings of any other package import — a parent resolving to one of these
- * must terminate the walk (it isn't a scanned local model), even if its name
- * collides with a real model/abstract base elsewhere in `app/models`. Relative
- * imports (`./x.js`) and same-file declarations are left out → followable.
+ * Classify a file's imports so the inheritance walk knows what an `extends X`
+ * targets: ActiveRecord's `Base` (terminal), a relative import (followed into
+ * its target file, alias-aware), or a package import (`external`, stops the
+ * walk even if the name collides with a real local model/base). Same-file
+ * declarations aren't imports and are resolved directly against the file.
  */
-function collectImports(sf: ts.SourceFile): FileImports {
+function collectImports(sf: ts.SourceFile): Pick<FileInfo, "arBase" | "external" | "relative"> {
   const arBase = new Set<string>();
   const external = new Set<string>();
+  const relative = new Map<string, RelativeImport>();
   for (const stmt of sf.statements) {
     if (!ts.isImportDeclaration(stmt) || !ts.isStringLiteral(stmt.moduleSpecifier)) continue;
     const spec = stmt.moduleSpecifier.text;
     const isRelative = spec.startsWith("./") || spec.startsWith("../");
+    const relFile = isRelative ? resolveRelativeFile(spec) : undefined;
     const clause = stmt.importClause;
     if (!clause) continue;
     const bind = (local: string, original: string): void => {
       if (spec === AR_PACKAGE && original === "Base") arBase.add(local);
       else if (!isRelative) external.add(local);
-      // relative imports are followable, so they're intentionally untracked
+      else if (relFile) relative.set(local, { original, file: relFile });
+      // unresolvable relative (nested/parent) → untracked → stops the walk
     };
     if (clause.name) bind(clause.name.text, "default"); // `import Foo from ...`
     const nb = clause.namedBindings;
     if (nb && ts.isNamedImports(nb)) {
       for (const el of nb.elements) bind(el.name.text, (el.propertyName ?? el.name).text);
-    } else if (nb && ts.isNamespaceImport(nb)) {
-      bind(nb.name.text, "*"); // `import * as Foo from ...`
+    } else if (nb && ts.isNamespaceImport(nb) && !isRelative) {
+      external.add(nb.name.text); // `import * as Foo from "pkg"`
     }
   }
-  return { arBase, external };
+  return { arBase, external, relative };
+}
+
+/** The name of a file's `export default class`, if any (for default imports). */
+function defaultExportName(info: FileInfo): string | undefined {
+  for (const node of info.classes.values()) if (node.isDefault) return node.name;
+  return undefined;
 }
 
 /** The identifier name of a class's `extends` clause, if it extends one. */
@@ -168,76 +185,88 @@ export async function scanModels(modelsDir: string): Promise<ModelEntry[]> {
   }
   const files = names.filter(isModelFile).sort();
 
-  const decls: ClassDecl[] = [];
+  const byFile = new Map<string, FileInfo>();
   for (const file of files) {
     const text = await fs.readFile!(path.join(modelsDir, file), "utf8");
     const sf = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true);
-    const imports = collectImports(sf);
+    const classes = new Map<string, ClassNode>();
     for (const stmt of sf.statements) {
       if (!ts.isClassDeclaration(stmt) || !stmt.name) continue;
-      if (!hasModifier(stmt, ts.SyntaxKind.ExportKeyword)) continue;
-      const parent = extendsName(stmt);
-      let parentKind: ParentKind = "stop";
-      if (parent !== undefined) {
-        if (imports.arBase.has(parent)) parentKind = "ar-base";
-        else if (imports.external.has(parent)) parentKind = "stop";
-        else parentKind = "follow"; // same-file declaration or relative import
-      }
-      decls.push({
+      classes.set(stmt.name.text, {
         name: stmt.name.text,
-        parent,
-        parentKind,
+        parent: extendsName(stmt),
+        isExported: hasModifier(stmt, ts.SyntaxKind.ExportKeyword),
         isDefault: hasModifier(stmt, ts.SyntaxKind.DefaultKeyword),
         isAbstract: isAbstractModel(stmt),
-        file,
       });
     }
-  }
-  // Two exported classes sharing a name collide on a single constant: the
-  // manifest can't import both, and — keying `byName` below — a non-model
-  // duplicate (`export class User {}`) would otherwise overwrite and silently
-  // hide a real model of the same name. Reject the ambiguity outright.
-  const byName = new Map<string, ClassDecl>();
-  for (const d of decls) {
-    const prior = byName.get(d.name);
-    if (prior)
-      throw new Error(`duplicate exported class "${d.name}" in ${prior.file} and ${d.file}`);
-    byName.set(d.name, d);
+    byFile.set(file, { file, classes, ...collectImports(sf) });
   }
 
-  // A class is a model iff its `extends` chain reaches ActiveRecord's `Base`.
-  // `ar-base` terminates true; `follow` continues to the parent's local decl;
-  // `stop` (no parent, or an external import) terminates false — so a parent
-  // imported from another package never resolves to a same-named local model.
-  // `seen` guards cyclic declarations, `cache` memoizes the single chain.
-  const cache = new Map<string, boolean>();
-  function reachesBase(name: string, seen: Set<string>): boolean {
-    const cached = cache.get(name);
-    if (cached !== undefined) return cached;
-    const decl = byName.get(name);
-    let result: boolean;
-    if (!decl || decl.parentKind === "stop") result = false;
-    else if (decl.parentKind === "ar-base") result = true;
-    else if (!decl.parent || seen.has(name)) result = false;
-    else {
-      seen.add(name);
-      result = reachesBase(decl.parent, seen);
+  // Two exported classes sharing a name can't both be imported into the
+  // manifest and signal an ambiguous constant — reject. (Non-exported classes
+  // are file-local and may repeat across files, so they're exempt.)
+  const exportedFrom = new Map<string, string>();
+  for (const info of byFile.values()) {
+    for (const node of info.classes.values()) {
+      if (!node.isExported) continue;
+      const prior = exportedFrom.get(node.name);
+      if (prior) {
+        throw new Error(`duplicate exported class "${node.name}" in ${prior} and ${info.file}`);
+      }
+      exportedFrom.set(node.name, info.file);
     }
-    cache.set(name, result);
+  }
+
+  // Does the class `name` (declared in `info`) transitively reach ActiveRecord's
+  // `Base`? Resolution is scoped to each file: the `extends` target is matched
+  // against that file's same-file declarations (followed in place, so a private
+  // base counts), AR-Base imports (terminal), or relative imports (followed
+  // into the target file by the imported name, alias-aware). Anything else —
+  // a package import or unknown identifier — stops the walk. `memo` caches the
+  // single-inheritance result; `seen` guards cycles.
+  const memo = new Map<string, boolean>();
+  function reachesBase(info: FileInfo, name: string, seen: Set<string>): boolean {
+    const key = `${info.file}#${name}`;
+    const cached = memo.get(key);
+    if (cached !== undefined) return cached;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    let result = false;
+    const parent = info.classes.get(name)?.parent;
+    if (parent !== undefined) {
+      if (info.arBase.has(parent)) result = true;
+      else if (info.classes.has(parent)) result = reachesBase(info, parent, seen);
+      else {
+        const imp = info.relative.get(parent);
+        const target = imp && byFile.get(imp.file);
+        if (imp && target) {
+          const targetName = imp.original === "default" ? defaultExportName(target) : imp.original;
+          if (targetName !== undefined) result = reachesBase(target, targetName, seen);
+        }
+      }
+    }
+    memo.set(key, result);
     return result;
   }
 
-  const models = decls.filter((d) => !d.isAbstract && reachesBase(d.name, new Set()));
-
-  return models
-    .map((d) => ({
-      className: d.name,
-      // `d.file` is a bare `*.ts` filename (isModelFile guarantees it); swap
-      // the extension for the ESM `.js` specifier the manifest imports from.
-      importPath: `./${d.file.replace(/\.ts$/, ".js")}`,
-      isDefault: d.isDefault,
-    }))
-    .sort((a, b) => (a.className < b.className ? -1 : a.className > b.className ? 1 : 0));
+  const entries: ModelEntry[] = [];
+  for (const info of byFile.values()) {
+    for (const node of info.classes.values()) {
+      if (!node.isExported || node.isAbstract) continue;
+      if (!reachesBase(info, node.name, new Set())) continue;
+      entries.push({
+        className: node.name,
+        // `info.file` is a bare `*.ts` filename (isModelFile guarantees it);
+        // swap the extension for the ESM `.js` specifier the manifest imports.
+        importPath: `./${info.file.replace(/\.ts$/, ".js")}`,
+        isDefault: node.isDefault,
+      });
+    }
+  }
+  return entries.sort((a, b) =>
+    a.className < b.className ? -1 : a.className > b.className ? 1 : 0,
+  );
 }
 
 /** Render the manifest source for a set of model entries. */

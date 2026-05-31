@@ -99,6 +99,34 @@ describe("ArGenerateManifestTest", () => {
     expect((await scanModels(dir)).map((e) => e.className)).toEqual(["User"]);
   });
 
+  it("discovers a model whose superclass is a private (non-exported) same-file base", async () => {
+    await writeModel(
+      dir,
+      "user.ts",
+      `import { Base } from "@blazetrails/activerecord";\n` +
+        `class ApplicationRecord extends Base {}\n` + // private, not exported
+        `export class User extends ApplicationRecord {}\n`,
+    );
+    // User transitively reaches Base through the private base, so it registers.
+    expect((await scanModels(dir)).map((e) => e.className)).toEqual(["User"]);
+  });
+
+  it("resolves a relative import alias to the target class", async () => {
+    await writeModel(
+      dir,
+      "application_record.ts",
+      `import { Base } from "@blazetrails/activerecord";\nexport class ApplicationRecord extends Base {}\n`,
+    );
+    await writeModel(
+      dir,
+      "user.ts",
+      `import { ApplicationRecord as ARBase } from "./application_record.js";\n` +
+        `export class User extends ARBase {}\n`,
+    );
+    // ApplicationRecord is a concrete (non-abstract) base, so both register.
+    expect((await scanModels(dir)).map((e) => e.className)).toEqual(["ApplicationRecord", "User"]);
+  });
+
   it("does not follow an external parent that shares a name with a local base", async () => {
     // A real local abstract base named ApplicationRecord...
     await writeModel(

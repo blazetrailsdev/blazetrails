@@ -766,8 +766,13 @@ async function main(): Promise<void> {
   for (const [snake, rows] of yamlByTable) {
     yamlByTableName.set(snake.replace(/\//g, "_"), rows);
     if (snake.includes("/")) {
+      const joined = snake.replace(/\//g, "_");
       const base = snake.split("/").pop()!;
-      if (!yamlByTableName.has(base)) yamlByTableName.set(base, rows);
+      // Only alias by basename for non-namespaced grouping dirs whose joined
+      // form is not a real schema table (e.g. "reserved_words/distinct" → "distinct").
+      // Skip when the joined form IS in the schema (e.g. "admin/users" → "admin_users"
+      // is a real namespaced table; adding a "users" alias would mislead ref() lookups).
+      if (!TEST_SCHEMA[joined] && !yamlByTableName.has(base)) yamlByTableName.set(base, rows);
     }
   }
   const idIndex = buildIdIndex(yamlByTableName);

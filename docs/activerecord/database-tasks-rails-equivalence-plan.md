@@ -161,9 +161,10 @@ Rails: `test/cases/tasks/database_tasks_test.rb:122`.
 **Source:** "establishes connection for the given environments" (two-tier + three-tier).
 
 Rails `create_current` calls `ActiveRecord::Base.establish_connection(env)` after
-creating so the caller's pool is re-pointed to the env's primary. Added post-create
-`Base.establishConnection(primaryConfig.configuration)` call to `createCurrent`, where
-`primaryConfig` is resolved via `configsFor(env).find(isPrimary)`. 2 tests unskipped.
+creating so the caller's pool is re-pointed to the env's first config. Added post-create
+`Base.establishConnection(config.configuration)` call to `createCurrent`, where the
+config is resolved via `databaseConfiguration.findDbConfig(envName)` (mirrors Rails'
+`configurations.find_db_config`) with SQLite path normalization applied. 2 tests unskipped.
 
 Rails: `test/cases/tasks/database_tasks_test.rb:586, 703`.
 

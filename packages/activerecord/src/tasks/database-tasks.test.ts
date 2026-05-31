@@ -2034,4 +2034,59 @@ describe("DatabaseTasksWithTemporaryPoolTest", () => {
     expect(visited).toContain("secondary");
     expect(withTemporaryPoolSpy).toHaveBeenCalledTimes(2);
   });
+
+  it("withTemporaryPoolForEach filters to a single config when name: is given", async () => {
+    DatabaseTasks.databaseConfiguration = new DatabaseConfigurations({
+      test: {
+        primary: { adapter: "sqlite3", database: ":memory:" },
+        secondary: { adapter: "sqlite3", database: ":memory:" },
+      },
+    });
+    const visited: string[] = [];
+    const withTemporaryPoolSpy = vi.spyOn(DatabaseTasks, "withTemporaryPool");
+    await DatabaseTasks.withTemporaryPoolForEach(
+      "test",
+      async (config) => {
+        visited.push(config.name);
+      },
+      { name: "primary" },
+    );
+    expect(visited).toEqual(["primary"]);
+    expect(withTemporaryPoolSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("withTemporaryPool resolves relative SQLite database path against root", async () => {
+    const root = "/myapp";
+    DatabaseTasks.root = root;
+    const config = new HashConfig("test", "primary", {
+      adapter: "sqlite3",
+      database: "db/test.sqlite3",
+    });
+    const establishSpy = vi
+      .spyOn(Base, "establishConnection")
+      .mockResolvedValue(undefined as never);
+    vi.spyOn(Base, "connectionPool").mockReturnValue({
+      leaseConnection: () => ({}),
+    } as never);
+    await DatabaseTasks.withTemporaryPool(config, async () => {}).catch(() => {});
+    const firstCall = establishSpy.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
+    expect(firstCall?.["database"]).toBe("/myapp/db/test.sqlite3");
+  });
+
+  it("withTemporaryPool leaves :memory: SQLite paths unchanged", async () => {
+    DatabaseTasks.root = "/myapp";
+    const config = new HashConfig("test", "primary", {
+      adapter: "sqlite3",
+      database: ":memory:",
+    });
+    const establishSpy = vi
+      .spyOn(Base, "establishConnection")
+      .mockResolvedValue(undefined as never);
+    vi.spyOn(Base, "connectionPool").mockReturnValue({
+      leaseConnection: () => ({}),
+    } as never);
+    await DatabaseTasks.withTemporaryPool(config, async () => {}).catch(() => {});
+    const firstCall = establishSpy.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
+    expect(firstCall?.["database"]).toBe(":memory:");
+  });
 });

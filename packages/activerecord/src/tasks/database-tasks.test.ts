@@ -153,20 +153,21 @@ describe("DatabaseTasksDumpSchemaCacheTest", () => {
 
 describe("DatabaseTasksDumpSchemaTest", () => {
   it("ensure db dir", async () => {
-    // The schema output dir is removed before dumpSchema runs; dumpSchema must recreate it.
+    // Mirrors Rails: schemaDump is a bare filename; schemaDumpPath prepends dbDir.
+    // The dir is removed before dumpSchema runs; dumpSchema must recreate it.
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-ensure-dbdir-"));
-    const schemaPath = path.join(tmp, "schema_output", "fake_db_config_schema.ts");
     const prevDbDir = DatabaseTasks.dbDir;
     await Base.establishConnection({ adapter: "sqlite3", database: ":memory:", pool: 1 });
     try {
-      fs.rmSync(path.join(tmp, "schema_output"), { recursive: true, force: true });
-      expect(fs.existsSync(schemaPath)).toBe(false);
+      DatabaseTasks.dbDir = tmp;
+      const schemaPath = path.join(tmp, "fake_db_config_schema.ts");
       const config = new HashConfig("arunit", "primary", {
         adapter: "sqlite3",
         database: ":memory:",
-        schemaDump: schemaPath,
+        schemaDump: "fake_db_config_schema.ts",
       });
-      DatabaseTasks.dbDir = tmp;
+      fs.rmSync(tmp, { recursive: true, force: true });
+      expect(fs.existsSync(schemaPath)).toBe(false);
       await DatabaseTasks.dumpSchema(config);
       expect(fs.existsSync(schemaPath)).toBe(true);
     } finally {
@@ -180,20 +181,21 @@ describe("DatabaseTasksDumpSchemaTest", () => {
     }
   });
   it("db dir ignored if included in schema dump", async () => {
-    // Schema path includes the db_dir prefix — dumpSchema still creates it regardless.
+    // Mirrors Rails: schemaDump is an absolute path whose dirname == dbDir.
+    // schemaDumpPath returns it verbatim (no double-prefix).
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-dbdir-ignored-"));
-    const schemaPath = path.join(tmp, "db", "fake_db_config_schema.ts");
     const prevDbDir = DatabaseTasks.dbDir;
     await Base.establishConnection({ adapter: "sqlite3", database: ":memory:", pool: 1 });
     try {
-      fs.rmSync(path.join(tmp, "db"), { recursive: true, force: true });
-      expect(fs.existsSync(schemaPath)).toBe(false);
+      DatabaseTasks.dbDir = tmp;
+      const schemaPath = path.join(tmp, "fake_db_config_schema.ts");
       const config = new HashConfig("arunit", "primary", {
         adapter: "sqlite3",
         database: ":memory:",
-        schemaDump: schemaPath,
+        schemaDump: schemaPath, // absolute path — dirname == dbDir
       });
-      DatabaseTasks.dbDir = path.join(tmp, "db");
+      fs.rmSync(tmp, { recursive: true, force: true });
+      expect(fs.existsSync(schemaPath)).toBe(false);
       await DatabaseTasks.dumpSchema(config);
       expect(fs.existsSync(schemaPath)).toBe(true);
     } finally {

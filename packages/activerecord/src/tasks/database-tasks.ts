@@ -704,33 +704,40 @@ export class DatabaseTasks {
 
   /**
    * Mirrors Rails' `DatabaseTasks.schema_dump_path`:
-   * - Returns `ENV["SCHEMA"]` when set.
-   * - When config has an explicit `schemaDump` key in its raw configuration:
-   *   - `false`/`null` → returns `null` (dumping disabled).
-   *   - A string path → returns that path directly (custom location).
-   * - Otherwise falls back to `dumpSchemaFilename(config)` which includes
-   *   the `dbDir` prefix (e.g. `"db/schema.ts"`).
+   * 1. Returns `ENV["SCHEMA"]` when set.
+   * 2. Calls `config.schemaDump(format)` to get the raw filename — returns
+   *    `null` when dumping is disabled (`schemaDump: false`).
+   * 3. Applies Rails' db_dir prefix rule: if the filename's dirname already
+   *    equals `dbDir` it is returned as-is; otherwise `dbDir` is prepended.
    *
    * Returns `null` when the config disables schema dumping (`schemaDump: false`).
    */
   static schemaDumpPath(config?: DatabaseConfig): string | null {
     const envSchema = getEnv("SCHEMA")?.trim();
     if (envSchema) return envSchema;
-    if (config) {
-      // Only consult schemaDump() when the key is explicitly present in the
-      // configuration hash. The default (key absent) case defers to
-      // dumpSchemaFilename(), which includes the dbDir prefix. If we called
-      // schemaDump() unconditionally we'd get a bare filename ("schema.ts")
-      // instead of the full path ("db/schema.ts").
-      const rawCfg = (config as unknown as { configuration?: Record<string, unknown> })
-        .configuration;
-      if (rawCfg && Object.hasOwn(rawCfg, "schemaDump")) {
-        const val = rawCfg["schemaDump"];
-        if (val === false || val === null) return null;
-        if (typeof val === "string") return val;
-      }
+
+    // Resolve the raw filename from the config accessor, falling back to
+    // dumpSchemaFilename for non-HashConfig objects that lack schemaDump().
+    // We need the bare value (pre-dbDir) so we can apply the dirname check.
+    let filename: string | null;
+    const cfgWithDump = config as unknown as { schemaDump?: (format?: string) => string | null };
+    if (typeof cfgWithDump?.schemaDump === "function") {
+      const format = this.schemaFormat === "js" ? "ts" : this.schemaFormat;
+      filename = cfgWithDump.schemaDump(format);
+    } else {
+      // No schemaDump accessor — dumpSchemaFilename already includes dbDir.
+      return this.dumpSchemaFilename(config);
     }
-    return this.dumpSchemaFilename(config);
+
+    if (filename == null) return null;
+
+    // Mirrors: `File.dirname(filename) == db_dir ? filename : File.join(db_dir, filename)`.
+    // A bare name like "custom_schema.ts" gets the dbDir prefix; a path
+    // whose dirname already equals dbDir is returned verbatim.
+    const p = getPath();
+    const dir = p.dirname ? p.dirname(filename) : ".";
+    if (dir === this.dbDir) return filename;
+    return p.join ? p.join(this.dbDir, filename) : `${this.dbDir}/${filename}`;
   }
 
   static async dumpSchema(config: DatabaseConfig): Promise<void> {

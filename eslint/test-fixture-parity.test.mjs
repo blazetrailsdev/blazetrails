@@ -85,6 +85,16 @@ describe("test-fixture-parity rule", () => {
           filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
           code: `describe.only("T", () => { useFixtures(["customers"], () => conn); it("find single value object", () => {}); });`,
         },
+        {
+          name: "it.skipIf(cond)(...) is checked and passes when useFixtures present",
+          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+          code: `describe("T", () => { useFixtures(["customers"], () => conn); it.skipIf(true)("find single value object", () => {}); });`,
+        },
+        {
+          name: "describe.skipIf(cond)(...) is recognized as describe scope",
+          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+          code: `describe.skipIf(true)("T", () => { useFixtures(["customers"], () => conn); it("find single value object", () => {}); });`,
+        },
       ],
       invalid: [
         {
@@ -103,6 +113,12 @@ describe("test-fixture-parity rule", () => {
           name: "useFixtures in sibling describe does not satisfy another describe",
           filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
           code: `describe("A", () => { useFixtures(["customers"], () => conn); }); describe("B", () => { it("find single value object", () => {}); });`,
+          errors: [{ messageId: "missing" }],
+        },
+        {
+          name: "it.skipIf without useFixtures → warns",
+          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+          code: `describe("T", () => { it.skipIf(true)("find single value object", () => {}); });`,
           errors: [{ messageId: "missing" }],
         },
       ],

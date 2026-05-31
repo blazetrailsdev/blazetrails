@@ -49,11 +49,17 @@ function normalizeDesc(s) {
   return s.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-/** Returns true for `describe`, `describe.only`, `describe.skip`, etc. */
-function isDescribeCallee(callee) {
-  if (callee?.type === "Identifier") return callee.name === "describe";
-  if (callee?.type === "MemberExpression") return callee.object?.name === "describe";
-  return false;
+/**
+ * Recursively resolve the root base name of a callee, handling:
+ *   it(...)           → "it"
+ *   it.skip(...)      → "it"
+ *   it.skipIf(x)(...) → "it"  (CallExpression whose callee is a MemberExpression)
+ */
+function rootCalleeName(callee) {
+  if (callee?.type === "Identifier") return callee.name;
+  if (callee?.type === "MemberExpression") return callee.object?.name ?? null;
+  if (callee?.type === "CallExpression") return rootCalleeName(callee.callee);
+  return null;
 }
 
 /**
@@ -65,7 +71,7 @@ function allEnclosingDescribeBodies(node) {
   const bodies = [];
   let cur = node.parent;
   while (cur) {
-    if (cur.type === "CallExpression" && isDescribeCallee(cur.callee)) {
+    if (cur.type === "CallExpression" && rootCalleeName(cur.callee) === "describe") {
       const cb = cur.arguments[cur.arguments.length - 1];
       if (cb && (cb.type === "ArrowFunctionExpression" || cb.type === "FunctionExpression")) {
         if (cb.body?.type === "BlockStatement") bodies.push(cb.body);
@@ -107,15 +113,12 @@ const rule = {
 
     return {
       CallExpression(node) {
-        const calleeName =
-          node.callee?.type === "Identifier" ? node.callee.name : null;
+        const calleeName = rootCalleeName(node.callee);
         if (!calleeName) return;
 
         if (FIXTURE_CALLEE_NAMES.has(calleeName)) {
           const ancestors = allEnclosingDescribeBodies(node);
-          // null = file scope; a non-empty ancestors list means the nearest
-          // describe body is ancestors[0] — add it so nested it() checks can
-          // match by walking their own ancestor chain.
+          // null = file scope; ancestors[0] = nearest describe body.
           describeBodiesWithFixtures.add(ancestors.length > 0 ? ancestors[0] : null);
           return;
         }

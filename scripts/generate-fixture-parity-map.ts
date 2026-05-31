@@ -24,7 +24,10 @@ function railsToTrailsRel(railsRel: string): string {
 
 function parseFixtureNames(after: string): string[] {
   const names: string[] = [];
-  for (const m of after.matchAll(SYM_OR_STR)) names.push(m[1] ?? m[2]);
+  for (const m of after.matchAll(SYM_OR_STR)) {
+    const name = m[1] ?? m[2];
+    if (name) names.push(name);
+  }
   return names;
 }
 

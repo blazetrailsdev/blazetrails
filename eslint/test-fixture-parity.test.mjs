@@ -10,6 +10,7 @@ const ROOT = path.resolve(__dirname, "..");
 
 const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "test-fixture-parity-"));
 const TMP_MAP = path.join(TMP_DIR, "map.json");
+const _prevMapPath = process.env.TEST_FIXTURE_PARITY_MAP_PATH;
 process.env.TEST_FIXTURE_PARITY_MAP_PATH = TMP_MAP;
 
 const { default: rule } = await import("./test-fixture-parity.mjs");
@@ -26,6 +27,8 @@ beforeAll(() => {
 
 afterAll(() => {
   fs.rmSync(TMP_DIR, { recursive: true, force: true });
+  if (_prevMapPath === undefined) delete process.env.TEST_FIXTURE_PARITY_MAP_PATH;
+  else process.env.TEST_FIXTURE_PARITY_MAP_PATH = _prevMapPath;
 });
 
 describe("test-fixture-parity rule", () => {
@@ -48,7 +51,7 @@ describe("test-fixture-parity rule", () => {
         {
           name: "useHandlerTransactionalFixtures also satisfies",
           filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `describe("T", () => { useHandlerTransactionalFixtures(() => conn); it("find single value object", () => {}); });`,
+          code: `describe("T", () => { useHandlerTransactionalFixtures(); it("find single value object", () => {}); });`,
         },
         {
           name: "test not in mapping → no warning",

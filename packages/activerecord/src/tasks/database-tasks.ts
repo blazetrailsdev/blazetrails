@@ -1003,7 +1003,7 @@ export class DatabaseTasks {
       const dbConfig = this.databaseConfiguration?.configsFor({
         envName,
         name: options.name,
-      })[0];
+      })?.[0];
       if (dbConfig) await this.withTemporaryPool(dbConfig, async () => fn(dbConfig));
     } else {
       for (const config of this.configsFor(envName)) {

@@ -25,17 +25,6 @@ export class DatabaseNotSupported extends Error {
   }
 }
 
-// Mirrors SQLiteDatabaseTasks.isInMemoryDatabase — covers `:memory:`,
-// `file::memory:`, and URI `mode=memory` variants so in-memory pools are
-// never bypassed by the multi-db routing check in migrate().
-function _isMemoryDatabase(name: string): boolean {
-  if (name === ":memory:") return true;
-  if (!name.startsWith("file:")) return false;
-  if (name.startsWith("file::memory:")) return true;
-  const q = name.indexOf("?");
-  return q !== -1 && new URLSearchParams(name.slice(q + 1)).get("mode") === "memory";
-}
-
 function sqliteDatabaseFromUrl(url: string): string | undefined {
   try {
     const parsed = new URL(url);

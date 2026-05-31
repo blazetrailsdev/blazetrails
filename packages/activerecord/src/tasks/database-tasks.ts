@@ -211,16 +211,18 @@ export class DatabaseTasks {
       }
     }
     // Rails: establish_connection(environment.to_sym) re-points the caller's pool to the
-    // primary config for the env. Resolve the primary config here and pass the hash so
-    // Trails' establishConnection (which expects a URL or config object, not an env name)
-    // gets the correct adapter/database values.
+    // primary config for the env. Take the first config for the target env (equivalent to
+    // Rails resolving a symbol to the primary/first db_config for that env), then normalize
+    // relative SQLite paths against root before calling establishConnection.
     const envName = this._normalizeEnv(environment);
-    const primaryConfig = this.configsFor(envName).find(
-      (c) => this.databaseConfiguration?.isPrimary(c.name) ?? c.name === "primary",
-    );
+    const primaryConfig = this.configsFor(envName)[0];
     if (primaryConfig) {
       const { Base } = await import("../base.js");
-      await Base.establishConnection(primaryConfig.configuration as Record<string, unknown>);
+      const configuration = _normalizeSQLitePath(
+        primaryConfig.configuration as Record<string, unknown>,
+        this.root,
+      );
+      await Base.establishConnection(configuration);
     }
   }
 

@@ -140,10 +140,11 @@ Files: `tasks/database-tasks.test.ts`.
 
 ## Bundling guidance
 
-P2-1 must land first (adds `skipInitialize`). P2-3 depends on P2-1 and together
-they exceed 300 LOC — ship P2-1 standalone, then P2-2 + P2-3 together (~80 LOC).
-P2-1 + P2-2 + P2-3 are thematically related (`migrate`/`createAll`/`prepareAll`/
-`migrateAll`/`dbConfigsWithVersions` behavioral fidelity).
+P2-1 must land first (adds `skipInitialize` which P2-3 depends on), but at
+~30 + ~10 + ~60 LOC the three stories total well under 300 LOC and can ship
+as a single PR. P2-1 + P2-2 + P2-3 are thematically cohesive (`migrate`/
+`createAll`/`prepareAll`/`migrateAll`/`dbConfigsWithVersions` behavioral
+fidelity) — bundle all three together.
 P2-4 + P2-5 are small and can be bundled together. P2-6 and P2-7 are
 independent cleanups that can go separately or bundled with any of the above.
 P2-8 is a follow-up audit, not its own story — attach to whichever PR closes

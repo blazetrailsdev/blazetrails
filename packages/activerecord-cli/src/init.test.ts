@@ -159,6 +159,17 @@ describe("detectPackageManager", () => {
     expect(await detectPackageManager(root)).toBe("npm");
   });
 
+  it("stops walking at a workspace boundary (ancestor package.json)", async () => {
+    // pnpm-lock.yaml lives in the parent, but parent also has package.json → boundary
+    await writeFile(join(root, "pnpm-lock.yaml"), "", "utf8");
+    await writeFile(join(root, "package.json"), "{}", "utf8");
+    const child = join(root, "packages", "my-pkg");
+    await mkdir(child, { recursive: true });
+    // child has no lockfile; root has both pnpm-lock.yaml and package.json
+    // The walk should stop at root (package.json boundary) → fallback npm
+    expect(await detectPackageManager(child)).toBe("npm");
+  });
+
   it("packageManager field in package.json takes precedence over lockfile", async () => {
     // yarn.lock present, but packageManager says pnpm — field wins
     await writeFile(join(root, "yarn.lock"), "", "utf8");

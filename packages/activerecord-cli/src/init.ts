@@ -130,6 +130,14 @@ export async function detectPackageManager(startDir: string): Promise<PackageMan
     }
     const parent = dirname(dir);
     if (parent === dir) break;
+    // Stop at workspace boundaries: if the parent already has a package.json,
+    // don't inherit its lockfile — it belongs to a different project.
+    try {
+      await access(join(parent, "package.json"));
+      break;
+    } catch {
+      // no package.json in parent, safe to keep walking
+    }
     dir = parent;
   }
 
@@ -144,7 +152,7 @@ export async function addDepsToPackageJson(
   const raw = await readFile(pkgPath, "utf8");
   const pkg = JSON.parse(raw) as { dependencies?: Record<string, string>; [k: string]: unknown };
 
-  const indentMatch = raw.match(/\n(\s+)/);
+  const indentMatch = raw.match(/\n([ \t]+)/);
   const indent = indentMatch ? indentMatch[1] : "  ";
 
   if (!pkg.dependencies) pkg.dependencies = {};

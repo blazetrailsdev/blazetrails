@@ -84,7 +84,7 @@ Existing files are never overwritten.
 
 Options:
   --driver <name>   Database driver: better-sqlite3 (default), node-sqlite, pg, mysql2.
-  --force           Overwrite existing package.json with a fresh scaffold.`;
+  --force           Overwrite all existing scaffold files (package.json, config/database.ts, db.ts, etc.).`;
 
 const DB_CREATE_HELP = `ar db:create — create the database for the current TRAILS_ENV
 

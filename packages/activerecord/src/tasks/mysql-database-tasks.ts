@@ -8,6 +8,7 @@ import { getFs, getChildProcessAsync, type SpawnSyncResult } from "@blazetrails/
 import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseAlreadyExists } from "../errors.js";
+import { Base } from "../base.js";
 import { DatabaseTasks } from "./database-tasks.js";
 import { coercePort } from "./task-utils.js";
 
@@ -275,7 +276,6 @@ export class MySQLDatabaseTasks {
   }
 
   private async connection(): Promise<DatabaseAdapter> {
-    const { Base } = await import("../base.js");
     return Base.connectionPool().leaseConnection();
   }
 
@@ -316,7 +316,6 @@ export class MySQLDatabaseTasks {
 
   /** @internal */
   private async establishConnection(configHash?: Record<string, unknown>): Promise<void> {
-    const { Base } = await import("../base.js");
     await Base.establishConnection(
       (configHash ?? this.dbConfig.configuration) as { adapter?: string; [key: string]: unknown },
     );

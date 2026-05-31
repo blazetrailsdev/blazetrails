@@ -19,6 +19,7 @@ import {
 } from "@blazetrails/activesupport";
 import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
+import { Base } from "../base.js";
 import { DatabaseTasks } from "./database-tasks.js";
 import { NoDatabaseError, DatabaseAlreadyExists } from "../errors.js";
 
@@ -102,7 +103,6 @@ export class SQLiteDatabaseTasks {
 
   private async disconnect(): Promise<void> {
     try {
-      const { Base } = await import("../base.js");
       Base.connectionPool().disconnect();
     } catch {
       // best effort
@@ -123,7 +123,7 @@ export class SQLiteDatabaseTasks {
 
   async structureDump(filename: string, extraFlags?: string | string[] | null): Promise<void> {
     void extraFlags;
-    const adapter = await this.connection();
+    const adapter = await this.connectAdapter();
     const { SchemaDumper } = await import("../connection-adapters/abstract/schema-dumper.js");
     const ignoreTables = SchemaDumper.ignoreTables;
 
@@ -173,12 +173,13 @@ export class SQLiteDatabaseTasks {
     const rows = (await adapter.execute(query, binds)) as Array<Record<string, unknown>>;
     const output = rows.map((r) => String(r.sql ?? "")).join("\n");
     getFs().writeFileSync(filename, output);
+    await this.closeAdapter(adapter);
   }
 
   async structureLoad(filename: string, extraFlags?: string | string[] | null): Promise<void> {
     void extraFlags;
     const sql = getFs().readFileSync(filename, "utf8");
-    const adapter = await this.connection();
+    const adapter = await this.connectAdapter();
     // SQLite's `db.exec` runs an entire script in one shot, so it's safe
     // for dumps containing trigger bodies (CREATE TRIGGER ... BEGIN ...;
     // ...; END) where naive semicolon splitting would break.
@@ -190,6 +191,7 @@ export class SQLiteDatabaseTasks {
         await adapter.executeMutation(statement);
       }
     }
+    await this.closeAdapter(adapter);
   }
 
   /**
@@ -208,7 +210,7 @@ export class SQLiteDatabaseTasks {
    * the PG/MySQL truncateAll implementations provide.
    */
   async truncateAll(): Promise<void> {
-    const adapter = await this.connection();
+    const adapter = await this.connectAdapter();
     const rows = (await adapter.execute(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' " +
         "AND name <> 'schema_migrations' AND name <> 'ar_internal_metadata'",
@@ -238,6 +240,7 @@ export class SQLiteDatabaseTasks {
     } else {
       await run();
     }
+    await this.closeAdapter(adapter);
   }
 
   private resolveDbPath(): string {
@@ -255,16 +258,31 @@ export class SQLiteDatabaseTasks {
   }
 
   private async connection(): Promise<DatabaseAdapter> {
-    const { Base } = await import("../base.js");
     return Base.connectionPool().leaseConnection();
+  }
+
+  private async connectAdapter(): Promise<DatabaseAdapter> {
+    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
+    return new SQLite3Adapter(this.resolveDbPath());
+  }
+
+  private async closeAdapter(adapter: DatabaseAdapter): Promise<void> {
+    const close = (adapter as { close?: () => Promise<void> }).close;
+    if (typeof close === "function") await close.call(adapter);
   }
 
   /** @internal */
   private async establishConnection(config?: DatabaseConfig): Promise<void> {
-    const { Base } = await import("../base.js");
-    await Base.establishConnection(
-      (config ?? this.dbConfig).configuration as { adapter?: string; [key: string]: unknown },
-    );
+    if (config != null) {
+      await Base.establishConnection(
+        config.configuration as { adapter?: string; [key: string]: unknown },
+      );
+    } else {
+      await Base.establishConnection({
+        ...this.dbConfig.configuration,
+        database: this.resolveDbPath(),
+      } as { adapter?: string; [key: string]: unknown });
+    }
   }
 
   static register(): void {

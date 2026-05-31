@@ -30,6 +30,7 @@ describe("DbMigrateStatusTest", () => {
   let out: string[];
   let err: string[];
   let migrateStatusSpy: ReturnType<typeof vi.fn>;
+  let withTemporaryPoolFn: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     out = [];
@@ -38,6 +39,10 @@ describe("DbMigrateStatusTest", () => {
     vi.spyOn(console, "error").mockImplementation((m) => void err.push(String(m)));
     migrateStatusSpy = vi.fn().mockResolvedValue(FIXTURE_ROWS);
     vi.spyOn(DatabaseTasks, "migrateStatus").mockImplementation(migrateStatusSpy);
+    withTemporaryPoolFn = vi
+      .fn()
+      .mockImplementation(async (_config: unknown, fn: (p: never) => unknown) => fn({} as never));
+    vi.spyOn(DatabaseTasks, "withTemporaryPool").mockImplementation(withTemporaryPoolFn);
     vi.spyOn(Migrator, "discoverMigrations").mockReturnValue([]);
     DatabaseConfigurations.defaultEnv = "development";
   });
@@ -46,6 +51,12 @@ describe("DbMigrateStatusTest", () => {
     vi.restoreAllMocks();
     DatabaseTasks.databaseConfiguration = null;
     (DatabaseTasks as unknown as { _root: null })._root = null;
+  });
+
+  it("establishes a temporary pool before reading status", async () => {
+    const dir = await makeFakeProject();
+    await run(["db:migrate:status"], dir);
+    expect(withTemporaryPoolFn).toHaveBeenCalledOnce();
   });
 
   it("prints database header and up/down rows", async () => {
@@ -101,18 +112,15 @@ describe("DbMigrateStatusTest", () => {
   });
 
   it("--all iterates all configured databases", async () => {
-    const withTemporaryPoolSpy = vi
-      .spyOn(DatabaseTasks, "withTemporaryPool")
-      .mockImplementation(async (_config, fn) => fn({} as never));
     const dir = await makeFakeProject(FAKE_CONFIG);
     const code = await run(["db:migrate:status", "--all"], dir);
     expect(code).toBe(0);
-    expect(withTemporaryPoolSpy).toHaveBeenCalledTimes(2);
+    expect(withTemporaryPoolFn).toHaveBeenCalledTimes(2);
     expect(migrateStatusSpy).toHaveBeenCalledTimes(2);
   });
 
   it("--all exits 1 when one config fails", async () => {
-    vi.spyOn(DatabaseTasks, "withTemporaryPool").mockRejectedValueOnce(new Error("cant connect"));
+    withTemporaryPoolFn.mockRejectedValueOnce(new Error("cant connect"));
     const dir = await makeFakeProject(FAKE_CONFIG);
     const code = await run(["db:migrate:status", "--all"], dir);
     expect(code).toBe(1);

@@ -872,15 +872,12 @@ export class DatabaseTasks {
     const sorted = Array.from(mappedVersions.entries()).sort(([a], [b]) =>
       String(a).localeCompare(String(b)),
     );
-    for (const [version, versionConfigs] of sorted) {
-      for (const config of versionConfigs) {
-        await this.withTemporaryPool(config, async (pool) => {
-          const effectiveVersion = this.targetVersion();
-          this.checkTargetVersion(effectiveVersion ?? undefined);
+    for (const [version, dbConfigs] of sorted) {
+      for (const dbConfig of dbConfigs) {
+        await this.withTemporaryConnection(dbConfig, async (adapter) => {
           const { Migrator } = await import("../migration.js");
-          const adapter = pool.leaseConnection();
           const migrator = new Migrator(adapter, this._migrations);
-          await migrator.migrate(effectiveVersion ?? null);
+          await migrator.migrate(version ?? null);
           adapter.schemaCache?.clear();
         });
       }
@@ -890,13 +887,13 @@ export class DatabaseTasks {
   static async prepareAll(): Promise<void> {
     const env = this._normalizeEnv();
     let seed = false;
-    const dumpConfigs: DatabaseConfig[] = [];
+    const dumpDbConfigs: DatabaseConfig[] = [];
 
-    // Rails: initialize_database per config (creates DB + loads schema if needed).
+    // Rails: each_current_configuration { |db_config| initialize_database(db_config) }
     for (const envName of eachCurrentEnvironment(env)) {
-      for (const config of this.configsFor(envName)) {
-        const initialized = await initializeDatabase(config);
-        if (initialized && config.seeds) seed = true;
+      for (const dbConfig of this.configsFor(envName)) {
+        const databaseInitialized = await initializeDatabase(dbConfig);
+        if (databaseInitialized && dbConfig.seeds) seed = true;
       }
     }
 
@@ -906,22 +903,20 @@ export class DatabaseTasks {
       const sorted = Array.from(mappedVersions.entries()).sort(([a], [b]) =>
         String(a).localeCompare(String(b)),
       );
-      for (const [version, versionConfigs] of sorted) {
-        for (const config of versionConfigs) {
-          if (!dumpConfigs.includes(config)) dumpConfigs.push(config);
-          await this.withTemporaryPool(config, async (pool) => {
+      for (const [version, dbConfigs] of sorted) {
+        for (const dbConfig of dbConfigs) {
+          if (!dumpDbConfigs.includes(dbConfig)) dumpDbConfigs.push(dbConfig);
+          await this.withTemporaryPool(dbConfig, async (pool) => {
             const { Migrator } = await import("../migration.js");
-            const adapter = pool.leaseConnection();
-            const migrator = new Migrator(adapter, this._migrations);
+            const migrator = new Migrator(pool.leaseConnection(), this._migrations);
             await migrator.migrate(version ?? null);
-            adapter.schemaCache?.clear();
           });
         }
       }
     }
 
     if (this.dumpSchemaAfterMigration) {
-      for (const config of dumpConfigs) {
+      for (const config of dumpDbConfigs) {
         await this.withTemporaryPool(config, async () => {
           await this.dumpSchema(config);
         });
@@ -934,24 +929,24 @@ export class DatabaseTasks {
   static async dbConfigsWithVersions(
     environment?: string,
   ): Promise<Map<string | number, DatabaseConfig[]>> {
-    const result = new Map<string | number, DatabaseConfig[]>();
+    const dbConfigsWithVersions = new Map<string | number, DatabaseConfig[]>();
     const env = this._normalizeEnv(environment);
-    const targetVer = this.targetVersion();
+    const targetVersion = this.targetVersion();
     const { Migrator } = await import("../migration.js");
     for (const config of this.configsFor(env)) {
       await this.withTemporaryPool(config, async (pool) => {
-        const adapter = pool.leaseConnection();
-        const migrator = new Migrator(adapter, this._migrations);
-        const versions = await migrator.pendingMigrationVersions();
-        for (const version of versions) {
-          if (targetVer !== null && targetVer !== Number(version)) continue;
-          const list = result.get(version) ?? [];
-          list.push(config);
-          result.set(version, list);
+        const dbConfig = pool.dbConfig;
+        const migrator = new Migrator(pool.leaseConnection(), this._migrations);
+        const versionsToRun = await migrator.pendingMigrationVersions();
+        for (const version of versionsToRun) {
+          if (targetVersion !== null && targetVersion !== Number(version)) continue;
+          const list = dbConfigsWithVersions.get(version) ?? [];
+          list.push(dbConfig);
+          dbConfigsWithVersions.set(version, list);
         }
       });
     }
-    return result;
+    return dbConfigsWithVersions;
   }
 
   /**

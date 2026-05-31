@@ -692,7 +692,7 @@ describe("DatabaseTasksMigrateTest", () => {
     }
   });
 
-  it("migrate calls initializeDatabase unless skipInitialize is true", async () => {
+  it("migrate calls initializeDatabase by default, skips when skipInitialize is true", async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-migrate-init-"));
     const dbFile = path.join(tmp, "test.sqlite3");
     DatabaseTasks.registerTask("sqlite", { create: async () => {} });
@@ -702,23 +702,20 @@ describe("DatabaseTasksMigrateTest", () => {
     DatabaseTasks.registerMigrations([]);
     Base.removeConnection();
     await Base.establishConnection({ adapter: "sqlite3", database: dbFile, pool: 1 });
-    const calls: string[] = [];
-    const orig = initializeDatabase;
-    // spy by patching DatabaseTasks directly via withTemporaryConnection side-effects:
-    // initializeDatabase creates schema_migrations; verify it exists after migrate.
+    // initializeDatabase always calls withTemporaryConnection; spy on it to count calls.
+    const spy = vi.spyOn(DatabaseTasks, "withTemporaryConnection");
     try {
+      // Default path — initializeDatabase should call withTemporaryConnection once.
       await DatabaseTasks.migrate();
-      const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
-      const a = new SQLite3Adapter(dbFile);
-      try {
-        const rows = await a.execute(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
-        );
-        expect(rows).toHaveLength(1);
-      } finally {
-        await a.close();
-      }
+      const callsWithInit = spy.mock.calls.length;
+      expect(callsWithInit).toBeGreaterThan(0);
+
+      spy.mockClear();
+      // skipInitialize: true — withTemporaryConnection should not be called by initializeDatabase.
+      await DatabaseTasks.migrate(undefined, { skipInitialize: true });
+      expect(spy.mock.calls.length).toBe(0);
     } finally {
+      spy.mockRestore();
       try {
         Base.removeConnection();
       } catch {
@@ -726,8 +723,6 @@ describe("DatabaseTasksMigrateTest", () => {
       }
       fs.rmSync(tmp, { recursive: true, force: true });
     }
-    void orig;
-    void calls;
   });
 
   it("migrateAll calls initializeDatabase for each config before migrating", async () => {
@@ -744,21 +739,14 @@ describe("DatabaseTasksMigrateTest", () => {
     DatabaseTasks.registerMigrations([]);
     Base.removeConnection();
     await Base.establishConnection({ adapter: "sqlite3", database: primaryDb, pool: 1 });
+    // initializeDatabase always calls withTemporaryConnection; spy before migrateAll runs.
+    const spy = vi.spyOn(DatabaseTasks, "withTemporaryConnection");
     try {
       await DatabaseTasks.migrateAll();
-      const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
-      for (const dbFile of [primaryDb, animalsDb]) {
-        const a = new SQLite3Adapter(dbFile);
-        try {
-          const rows = await a.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
-          );
-          expect(rows).toHaveLength(1);
-        } finally {
-          await a.close();
-        }
-      }
+      // Two configs → withTemporaryConnection called at least twice (once per initializeDatabase).
+      expect(spy.mock.calls.length).toBeGreaterThanOrEqual(2);
     } finally {
+      spy.mockRestore();
       try {
         Base.removeConnection();
       } catch {

@@ -84,8 +84,8 @@ function renderBody(snakeName: string, fields: FieldSpec[]): string {
     const cols = fields
       .map((f) =>
         isReference(f.type)
-          ? `    await this.addReference("${tbl}", "${normalizeRefName(f.name)}", { foreignKey: true });`
-          : `    await this.addColumn("${tbl}", "${f.name}", "${f.type}");`,
+          ? `    await this.addReference(${JSON.stringify(tbl)}, ${JSON.stringify(normalizeRefName(f.name))}, { foreignKey: true });`
+          : `    await this.addColumn(${JSON.stringify(tbl)}, ${JSON.stringify(f.name)}, ${JSON.stringify(f.type)});`,
       )
       .join("\n");
     return cols || `    // TODO: add columns to ${tbl}`;
@@ -98,8 +98,8 @@ function renderBody(snakeName: string, fields: FieldSpec[]): string {
     const cols = fields
       .map((f) =>
         isReference(f.type)
-          ? `    await this.removeReference("${tbl}", "${normalizeRefName(f.name)}");`
-          : `    await this.removeColumn("${tbl}", "${f.name}", "${f.type}");`,
+          ? `    await this.removeReference(${JSON.stringify(tbl)}, ${JSON.stringify(normalizeRefName(f.name))});`
+          : `    await this.removeColumn(${JSON.stringify(tbl)}, ${JSON.stringify(f.name)}, ${JSON.stringify(f.type)});`,
       )
       .join("\n");
     return cols || `    // TODO: remove columns from ${tbl}`;

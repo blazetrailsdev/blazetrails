@@ -1,4 +1,4 @@
-import { mkdir, writeFile, access } from "fs/promises";
+import { mkdir, writeFile, access, unlink } from "fs/promises";
 import { join } from "path";
 import { camelize, pluralize } from "@blazetrails/activesupport";
 import { renderMigration, normalizeSnakeName, normalizeRefName } from "./generate-migration.js";
@@ -75,18 +75,19 @@ export async function generateModel(
   if (!options.dryRun) {
     await mkdir(join(root, "app", "models"), { recursive: true });
     await mkdir(join(root, "db", "migrate"), { recursive: true });
-    // Atomic create via "wx" flag — EEXIST means a concurrent write beat us.
+    const writeFlag = { encoding: "utf8" as const, flag: options.force ? "w" : "wx" };
+    // Atomic create: "wx" fails with EEXIST if a concurrent write beat the upfront check.
+    await writeFile(modelPath, renderModel(className, fields), writeFlag);
     try {
-      await writeFile(modelPath, renderModel(className, fields), {
-        encoding: "utf8",
-        flag: options.force ? "w" : "wx",
-      });
-      await writeFile(migrationPath, renderMigration(`create_${pluralize(snakeName)}`, fields), {
-        encoding: "utf8",
-        flag: options.force ? "w" : "wx",
-      });
+      await writeFile(
+        migrationPath,
+        renderMigration(`create_${pluralize(snakeName)}`, fields),
+        writeFlag,
+      );
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+        // Clean up the model file we just created so the run leaves no partial state.
+        await unlink(modelPath).catch(() => undefined);
         return { modelPath, migrationPath, written: false, skipped: true };
       }
       throw err;

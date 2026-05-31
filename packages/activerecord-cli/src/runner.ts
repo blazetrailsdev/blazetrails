@@ -25,7 +25,6 @@ export async function arRunner(cwd: string, args: string[]): Promise<number> {
     console.error("ar: runner requires a script path.");
     return 1;
   }
-  // Strip any --env <value> pairs that appear after the script path.
   const scriptArgv = args
     .slice(scriptIdx + 1)
     .filter((a, i, arr) => a !== "--env" && arr[i - 1] !== "--env");

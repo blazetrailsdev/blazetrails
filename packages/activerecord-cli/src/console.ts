@@ -29,14 +29,25 @@ export async function arConsole(
   const configs = DatabaseTasks.configsFor(env);
   if (configs.length > 0) {
     try {
-      await Base.establishConnection({ ...configs[0]! });
+      await Base.establishConnection(configs[0]!.configurationHash as { [key: string]: unknown });
     } catch (err) {
       console.error(`ar: failed to establish connection — ${String(err)}`);
       return 1;
     }
   }
 
-  const models = await tryLoadModels(cwd);
+  let models: Record<string, unknown>;
+  try {
+    models = await tryLoadModels(cwd);
+  } catch (err) {
+    console.error(`ar: failed to load app/models/index.ts — ${String(err)}`);
+    try {
+      Base.removeConnection();
+    } catch {
+      /* ignore */
+    }
+    return 1;
+  }
 
   type ReplStart = (o: { prompt: string; useGlobal: boolean }) => {
     on(e: string, cb: () => void): void;

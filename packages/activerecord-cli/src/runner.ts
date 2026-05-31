@@ -8,19 +8,26 @@ export async function arRunner(cwd: string, args: string[]): Promise<number> {
     process.env["TRAILS_ENV"] = args[envIdx + 1];
   }
 
-  const positional: string[] = [];
+  // Find the script path: first non-flag arg, skipping --env <value>.
+  let scriptPath: string | undefined;
+  let scriptIdx = -1;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--env") {
       i++;
       continue;
     }
-    if (!args[i]!.startsWith("-")) positional.push(args[i]!);
+    if (!args[i]!.startsWith("-")) {
+      scriptPath = args[i];
+      scriptIdx = i;
+      break;
+    }
   }
-  const scriptPath = positional[0];
   if (!scriptPath) {
     console.error("ar: runner requires a script path.");
     return 1;
   }
+  // Everything after the script path is forwarded verbatim (including flags).
+  const scriptArgv = args.slice(scriptIdx + 1);
 
   try {
     await loadDatabaseConfig(cwd);
@@ -33,24 +40,21 @@ export async function arRunner(cwd: string, args: string[]): Promise<number> {
   const configs = DatabaseTasks.configsFor(env);
   if (configs.length > 0) {
     try {
-      await Base.establishConnection({ ...configs[0]! });
+      await Base.establishConnection(configs[0]!.configurationHash as { [key: string]: unknown });
     } catch (err) {
       console.error(`ar: failed to establish connection — ${String(err)}`);
       return 1;
     }
   }
 
-  await tryLoadModels(cwd);
-
-  const scriptArgv = positional.slice(1);
   (globalThis as unknown as Record<string, unknown>)["__ARGV__"] = scriptArgv;
-
   const abs = resolve(join(cwd, scriptPath));
   const { pathToFileURL } = await import("node:url");
   try {
+    await tryLoadModels(cwd);
     await import(pathToFileURL(abs).href);
   } catch (err) {
-    console.error(`ar: runner script failed — ${String(err)}`);
+    console.error(`ar: runner failed — ${String(err)}`);
     return 1;
   } finally {
     try {

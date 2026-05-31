@@ -158,19 +158,12 @@ re-runs generate:manifest. Refuses when a file differs from the template.
 Options:
   --force    Delete even if hand-modified.   --dry-run  Print without deleting.`;
 
-const CONSOLE_HELP = `ar console — launch a REPL with Base + models pre-loaded
-
-Loads config/database.ts, establishes a connection, imports app/models/index.ts,
-and opens a Node REPL with Base and all exported models in scope. Prompt: "trails> ".
-
+const CONSOLE_HELP = `ar console — REPL with Base + app/models pre-loaded. Prompt: "trails> ".
 Options:
   --env <name>   Override TRAILS_ENV for this session.`;
 
-const RUNNER_HELP = `ar runner <script> [args...] — run a script with Base + models pre-loaded
-
-Loads config/database.ts, establishes a connection, imports app/models/index.ts,
-then imports the script. Remaining positional args are passed as __ARGV__.
-
+const RUNNER_HELP = `ar runner <script> [args...] — run a script with Base + app/models pre-loaded.
+Remaining positional args after <script> are forwarded as __ARGV__.
 Options:
   --env <name>   Override TRAILS_ENV for this invocation.`;
 
@@ -454,8 +447,6 @@ export async function run(argv: string[], cwd: string): Promise<number> {
     return arConsole(cwd, rest);
   }
   if (command === "runner") {
-    // Only show help when --help is the first arg (no script yet) so scripts
-    // can receive --help in __ARGV__ via: ar runner script.ts --help
     if (rest.length === 0 || rest[0] === "--help" || rest[0] === "-h") {
       console.log(RUNNER_HELP);
       return 0;

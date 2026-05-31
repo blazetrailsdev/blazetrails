@@ -104,14 +104,16 @@ export class SQLiteDatabaseTasks {
   private async disconnect(): Promise<void> {
     try {
       const pool = Base.connectionPool();
-      // Await async close() before pool.disconnect() fires disconnectBang()
-      // synchronously — for async SQLite drivers (wasm/sqlite-wasm) the sync
-      // path in disconnectBang() does not await driver.close() (#1269).
-      try {
-        const conn = pool.leaseConnection() as { close?: () => Promise<void> };
-        if (typeof conn.close === "function") await conn.close();
-      } catch {
-        // no active connection in pool to close
+      // Iterate existing pool connections and await their async close() before
+      // pool.disconnect() fires disconnectBang() synchronously. disconnectBang()
+      // does not await driver.close() for async SQLite drivers (#1269).
+      for (const conn of pool.connections) {
+        try {
+          const c = conn as { close?: () => Promise<void> };
+          if (typeof c.close === "function") await c.close();
+        } catch {
+          // best effort per connection
+        }
       }
       pool.disconnect();
     } catch {
@@ -197,9 +199,9 @@ export class SQLiteDatabaseTasks {
       // SQLite's `db.exec` runs an entire script in one shot, so it's safe
       // for dumps containing trigger bodies (CREATE TRIGGER ... BEGIN ...;
       // ...; END) where naive semicolon splitting would break.
-      const exec = (adapter as unknown as { exec?: (sql: string) => void }).exec;
+      const exec = (adapter as unknown as { exec?: (sql: string) => Promise<void> | void }).exec;
       if (typeof exec === "function") {
-        exec.call(adapter, sql);
+        await exec.call(adapter, sql);
       } else {
         for (const statement of splitSqlStatements(sql)) {
           await adapter.executeMutation(statement);

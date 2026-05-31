@@ -1,7 +1,15 @@
 #!/usr/bin/env -S npx tsx
 /**
  * Generates eslint/test-fixture-parity.json — trails file → fixture-using
- * test descriptions. Class-level `fixtures :foo` marks ALL tests in the file.
+ * test descriptions.
+ *
+ * Detection signals (union):
+ *   1. Class-level `fixtures :foo` + per-test body accessor `foo(:record)` →
+ *      marks that specific test (precise: skips tests that don't touch fixtures).
+ *   2. Class-level `fixtures :foo` with NO body access detected for a test →
+ *      marks the test anyway (Rails still loads fixtures for it; it may use
+ *      fixtures indirectly via associations or model state).
+ *
  * Run: pnpm tsx scripts/generate-fixture-parity-map.ts  (commit the result).
  */
 // fs/path bare per convention; sync fs acceptable in a one-shot CLI generator.
@@ -31,23 +39,58 @@ function parseFixtureNames(after: string): string[] {
   return names;
 }
 
-function extractTestDescs(src: string): string[] {
+interface TestEntry {
+  desc: string;
+  bodyLines: string[];
+}
+
+function extractTests(src: string): TestEntry[] {
   const lines = src.split("\n");
-  const descs: string[] = [];
+  const entries: TestEntry[] = [];
 
   const DEF_RE = /^(\s*)def\s+(test_[a-zA-Z0-9_?!]*)/;
   const BLK_RE = /^(\s*)test\s+["']([^"']+)["']\s+do\b/;
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const dm = line.match(DEF_RE);
     if (dm) {
-      descs.push(normalize(dm[2].replace(/^test_/, "").replace(/_/g, " ")));
+      const end = findBodyEnd(lines, i, dm[1].length);
+      entries.push({
+        desc: normalize(dm[2].replace(/^test_/, "").replace(/_/g, " ")),
+        bodyLines: lines.slice(i + 1, end),
+      });
       continue;
     }
     const bm = line.match(BLK_RE);
-    if (bm) descs.push(normalize(bm[2]));
+    if (bm) {
+      const end = findBodyEnd(lines, i, bm[1].length);
+      entries.push({ desc: normalize(bm[2]), bodyLines: lines.slice(i + 1, end) });
+    }
   }
-  return descs;
+  return entries;
+}
+
+function findBodyEnd(lines: string[], startIdx: number, indent: number): number {
+  for (let j = startIdx + 1; j < lines.length; j++) {
+    const l = lines[j];
+    if (l.trim() === "") continue;
+    const lead = l.match(/^(\s*)/)![1].length;
+    if (lead === indent && /^\s*end\b/.test(l)) return j;
+  }
+  return lines.length;
+}
+
+/**
+ * Build a regex that matches bare `fixtureSetName(:` accessor calls.
+ * Uses word-boundary so `categories(` doesn't match inside `categories_posts(`.
+ */
+function buildAccessorRe(fixtureNames: string[]): RegExp | null {
+  const escaped = fixtureNames
+    .filter((n) => /^[a-zA-Z_]/.test(n))
+    .map((n) => n.replace(/[-]/g, "\\-"));
+  if (escaped.length === 0) return null;
+  return new RegExp(`\\b(${escaped.join("|")})\\s*\\(`);
 }
 
 function processFile(file: string): { trailsRel: string; descs: string[] } | null {
@@ -58,15 +101,26 @@ function processFile(file: string): { trailsRel: string; descs: string[] } | nul
   for (const m of src.matchAll(/^\s*fixtures\s+(.+)$/gm)) {
     fixtureNames.push(...parseFixtureNames(m[1]));
   }
-
   if (fixtureNames.length === 0) return null;
 
-  const descs = extractTestDescs(src);
-  if (descs.length === 0) return null;
+  const tests = extractTests(src);
+  if (tests.length === 0) return null;
+
+  const accessorRe = buildAccessorRe(fixtureNames);
+
+  // Mark tests that access fixtures in their body; fall back to marking all
+  // when no body-access is detected (class-level declaration implies availability).
+  const withAccess = accessorRe ? tests.filter((t) => accessorRe.test(t.bodyLines.join("\n"))) : [];
+
+  // If the file declares fixtures but no test body references them, the whole
+  // file still counts — Rails loads them for every test.
+  const useDescs = withAccess.length > 0 ? withAccess.map((t) => t.desc) : tests.map((t) => t.desc);
+
+  if (useDescs.length === 0) return null;
 
   const relPath = path.relative(CASES_DIR, file).replace(/\\/g, "/");
   const trailsRel = railsToTrailsRel(relPath);
-  return { trailsRel, descs: [...new Set(descs)].sort() };
+  return { trailsRel, descs: [...new Set(useDescs)].sort() };
 }
 
 function walk(dir: string, acc: string[] = []): string[] {

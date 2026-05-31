@@ -113,7 +113,7 @@ export async function resolveFixtureNames(
       table = entry.joinTable;
       model = null;
     } else {
-      await (entry as { addOn?: () => Promise<void> }).addOn?.();
+      if ("addOn" in entry) await entry.addOn?.();
       const m = await entry.model();
       table = m.tableName;
       model = m;

@@ -553,7 +553,7 @@ describe("fixtureRegistry conformance", () => {
         );
         expect(entry.joinTable.length, `${name}: joinTable must be non-empty`).toBeGreaterThan(0);
       } else {
-        await (entry as { addOn?: () => Promise<void> }).addOn?.();
+        if ("addOn" in entry) await entry.addOn?.();
         const ModelClass = await (entry as { model: () => Promise<typeof Base> }).model();
         expect(typeof ModelClass, `${name}: model thunk must resolve to a class`).toBe("function");
         expect(
@@ -597,7 +597,7 @@ describe("fixtureRegistry ref targets", () => {
       if (isJoinTableEntry(entry)) {
         loadable.add(entry.joinTable);
       } else {
-        await (entry as { addOn?: () => Promise<void> }).addOn?.();
+        if ("addOn" in entry) await entry.addOn?.();
         const M = await (entry as { model: () => Promise<typeof Base> }).model();
         loadable.add(M.tableName);
       }
@@ -660,7 +660,7 @@ describe("fixtureRegistry seeds against TEST_SCHEMA", () => {
         if (isJoinTableEntry(entry)) {
           await defineJoinTableFixtures(Base.adapter, entry.joinTable, data);
         } else {
-          await (entry as { addOn?: () => Promise<void> }).addOn?.();
+          if ("addOn" in entry) await entry.addOn?.();
           const ModelClass = await (entry as { model: () => Promise<typeof Base> }).model();
           await defineFixtures(Base.adapter, ModelClass, data);
         }

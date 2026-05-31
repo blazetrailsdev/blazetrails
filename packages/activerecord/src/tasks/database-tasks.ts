@@ -1349,6 +1349,17 @@ export async function initializeDatabase(dbConfig: DatabaseConfig): Promise<bool
   });
 }
 
+// Mirrors SQLite3Adapter._isMemoryFilename: `:memory:`, `file::memory:`, and
+// `file:...?mode=memory` are all in-memory and must not be path-resolved.
+function _isSQLiteMemoryDatabase(database: string): boolean {
+  if (database === ":memory:") return true;
+  if (!database.startsWith("file:")) return false;
+  if (database.startsWith("file::memory:")) return true;
+  const q = database.indexOf("?");
+  if (q === -1) return false;
+  return new URLSearchParams(database.slice(q + 1)).get("mode") === "memory";
+}
+
 // Mirrors Rails' SQLiteDatabaseTasks#initialize: resolve relative `database`
 // paths against root so all withTemporaryPool callers behave consistently.
 function _normalizeSQLitePath(
@@ -1358,7 +1369,7 @@ function _normalizeSQLitePath(
   const adapter = configuration["adapter"];
   if (typeof adapter !== "string" || !adapter.includes("sqlite")) return configuration;
   const database = configuration["database"];
-  if (typeof database !== "string" || database === ":memory:") return configuration;
+  if (typeof database !== "string" || _isSQLiteMemoryDatabase(database)) return configuration;
   const p = getPath();
   if (!p.isAbsolute || p.isAbsolute(database)) return configuration;
   return { ...configuration, database: p.resolve(root, database) };

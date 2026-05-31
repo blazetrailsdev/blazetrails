@@ -2077,25 +2077,25 @@ describe("DatabaseTasksWithTemporaryPoolTest", () => {
     }
   });
 
-  it("withTemporaryPool leaves :memory: SQLite paths unchanged", async () => {
-    const priorRoot = DatabaseTasks.root;
-    DatabaseTasks.root = "/myapp";
-    try {
-      const config = new HashConfig("test", "primary", {
-        adapter: "sqlite3",
-        database: ":memory:",
-      });
-      const establishSpy = vi
-        .spyOn(Base, "establishConnection")
-        .mockResolvedValue(undefined as never);
-      vi.spyOn(Base, "connectionPool").mockReturnValue({
-        leaseConnection: () => ({}),
-      } as never);
-      await DatabaseTasks.withTemporaryPool(config, async () => {});
-      const firstCall = establishSpy.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
-      expect(firstCall?.["database"]).toBe(":memory:");
-    } finally {
-      DatabaseTasks.root = priorRoot;
-    }
-  });
+  it.each([":memory:", "file::memory:?cache=shared", "file:memdb1?mode=memory&cache=shared"])(
+    "withTemporaryPool leaves in-memory SQLite path %s unchanged",
+    async (database) => {
+      const priorRoot = DatabaseTasks.root;
+      DatabaseTasks.root = "/myapp";
+      try {
+        const config = new HashConfig("test", "primary", { adapter: "sqlite3", database });
+        const establishSpy = vi
+          .spyOn(Base, "establishConnection")
+          .mockResolvedValue(undefined as never);
+        vi.spyOn(Base, "connectionPool").mockReturnValue({
+          leaseConnection: () => ({}),
+        } as never);
+        await DatabaseTasks.withTemporaryPool(config, async () => {});
+        const firstCall = establishSpy.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
+        expect(firstCall?.["database"]).toBe(database);
+      } finally {
+        DatabaseTasks.root = priorRoot;
+      }
+    },
+  );
 });

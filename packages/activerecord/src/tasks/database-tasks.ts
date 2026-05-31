@@ -25,6 +25,17 @@ export class DatabaseNotSupported extends Error {
   }
 }
 
+// Mirrors SQLiteDatabaseTasks.isInMemoryDatabase — covers `:memory:`,
+// `file::memory:`, and URI `mode=memory` variants so in-memory pools are
+// never bypassed by the multi-db routing check in migrate().
+function _isMemoryDatabase(name: string): boolean {
+  if (name === ":memory:") return true;
+  if (!name.startsWith("file:")) return false;
+  if (name.startsWith("file::memory:")) return true;
+  const q = name.indexOf("?");
+  return q !== -1 && new URLSearchParams(name.slice(q + 1)).get("mode") === "memory";
+}
+
 function sqliteDatabaseFromUrl(url: string): string | undefined {
   try {
     const parsed = new URL(url);
@@ -257,19 +268,46 @@ export class DatabaseTasks {
 
     const config = configs.find((c) => c.name === "primary") ?? configs[0];
     const { Migrator } = await import("../migration.js");
-    const adapter = await this._resolveAdapter(config);
-    if (!adapter) {
-      throw new Error("No database adapter configured. Call DatabaseTasks.setAdapter() first.");
+
+    const runMigration = async (adapter: import("../adapter.js").DatabaseAdapter) => {
+      const migrator = new Migrator(adapter, this._migrations);
+      await migrator.migrate(effectiveVersion ?? null);
+      // Rails: `migration_connection_pool.schema_cache.clear!` — drop the
+      // reflected schema so post-migration introspection re-reads the
+      // freshly-migrated tables. Optional-chained so an adapter without a
+      // schema cache is a no-op rather than a crash.
+      adapter.schemaCache?.clear();
+    };
+
+    // Shim path (legacy): use the explicitly set adapter directly.
+    if (this._adapterInstance) {
+      await runMigration(this._adapterInstance);
+      return;
     }
 
-    const migrator = new Migrator(adapter, this._migrations);
-    await migrator.migrate(effectiveVersion ?? null);
-
-    // Rails: `migration_connection_pool.schema_cache.clear!` — drop the
-    // reflected schema so post-migration introspection re-reads the
-    // freshly-migrated tables. Optional-chained so an adapter without a
-    // schema cache is a no-op rather than a crash.
-    adapter.schemaCache?.clear();
+    // Pool path: check whether the Base pool is connected to this config's database.
+    // When the pool targets a different file-backed DB (multi-db scenario), route
+    // through withTemporaryConnection so the owned adapter is properly closed.
+    // _isMemoryDatabase covers `:memory:`, `file::memory:`, and `mode=memory` URIs —
+    // in-memory pools always match any config and must not be bypassed.
+    const { Base } = await import("../base.js");
+    let poolDb: string | undefined;
+    try {
+      poolDb = Base.connectionPool().dbConfig.database;
+    } catch (error) {
+      const { ConnectionNotDefined } = await import("../errors.js");
+      if (!(error instanceof ConnectionNotDefined)) throw error;
+      // No pool — fall through to withTemporaryConnection via _connectFor.
+    }
+    if (poolDb && (_isMemoryDatabase(poolDb) || !config.database || config.database === poolDb)) {
+      const adapter = await this._migrationAdapter();
+      if (!adapter)
+        throw new Error("No database adapter configured. Call DatabaseTasks.setAdapter() first.");
+      await runMigration(adapter);
+    } else {
+      // Multi-db or no pool: withTemporaryConnection scopes the adapter lifecycle.
+      await this.withTemporaryConnection(config, runMigration);
+    }
   }
 
   private static _adapterInstance: import("../adapter.js").DatabaseAdapter | null = null;
@@ -279,28 +317,9 @@ export class DatabaseTasks {
   }
 
   private static async _resolveAdapter(
-    config: DatabaseConfig,
+    _config: DatabaseConfig,
   ): Promise<import("../adapter.js").DatabaseAdapter | null> {
-    if (this._adapterInstance) return this._adapterInstance;
-    const { Base } = await import("../base.js");
-    let pool;
-    try {
-      pool = Base.connectionPool();
-    } catch (error) {
-      const { ConnectionNotDefined } = await import("../errors.js");
-      if (error instanceof ConnectionNotDefined) return null;
-      throw error;
-    }
-    // Multi-db: when the pool is connected to a different file-backed database
-    // than `config` requests, open a direct connection for `config`. In-memory
-    // pools (:memory:) always match any config — they exist solely to supply a
-    // shared connection for the test run and must not be bypassed. Per-config
-    // pool routing lands in full with withTemporaryPool (step 5).
-    const poolDb = pool.dbConfig.database;
-    if (config.database && poolDb && poolDb !== ":memory:" && config.database !== poolDb) {
-      return this._connectFor(config);
-    }
-    return pool.leaseConnection();
+    return this._migrationAdapter();
   }
 
   /**

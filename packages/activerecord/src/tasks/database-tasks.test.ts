@@ -629,6 +629,44 @@ describe("DatabaseTasksMigrateTest", () => {
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
+
+  it("migrate targets config database when Base pool is connected to a different db", async () => {
+    // Regression for the pool-mismatch routing path in migrate():
+    // pool points to animals.sqlite3, config selects primary.sqlite3.
+    // migrate() must run on primary — not on the currently-established pool.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-mismatch-"));
+    const primaryDb = path.join(tmp, "primary.sqlite3");
+    const animalsDb = path.join(tmp, "animals.sqlite3");
+    DatabaseTasks.registerTask("sqlite", { create: async () => {} });
+    DatabaseTasks.databaseConfiguration = new DatabaseConfigurations({
+      development: { adapter: "sqlite3", database: primaryDb },
+    });
+    DatabaseTasks.registerMigrations([]);
+    // Establish pool for animals (the "wrong" database).
+    Base.removeConnection();
+    await Base.establishConnection({ adapter: "sqlite3", database: animalsDb, pool: 1 });
+    try {
+      await DatabaseTasks.migrate();
+      // schema_migrations must exist in primary (config target), not just animals.
+      const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
+      const a = new SQLite3Adapter(primaryDb);
+      try {
+        const rows = await a.execute(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
+        );
+        expect(rows).toHaveLength(1);
+      } finally {
+        await (a as unknown as { close(): Promise<void> }).close();
+      }
+    } finally {
+      try {
+        Base.removeConnection();
+      } catch {
+        /* ignore */
+      }
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
 });
 
 // Covers the no-`setAdapter` resolution path added when DatabaseTasks moved

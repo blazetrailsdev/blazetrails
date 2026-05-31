@@ -110,6 +110,14 @@ describe("ArInitTest", () => {
     expect(result.packageJsonUpdated!.alreadyPresent).toContain("@blazetrails/activerecord");
   });
 
+  it("preserves tab indentation in an existing package.json", async () => {
+    const original = `{\n\t"name": "my-app",\n\t"dependencies": { "express": "^4.0.0" }\n}\n`;
+    await writeFile(join(root, "package.json"), original, "utf8");
+    await init(root);
+    const raw = await readFile(join(root, "package.json"), "utf8");
+    expect(raw).toMatch(/^\t/m);
+  });
+
   it("scaffolds a fresh package.json when none exists", async () => {
     const result = await init(root);
     expect(result.created).toContain("package.json");
@@ -139,6 +147,11 @@ describe("detectPackageManager", () => {
 
   it("returns bun when bun.lockb is present", async () => {
     await writeFile(join(root, "bun.lockb"), "", "utf8");
+    expect(await detectPackageManager(root)).toBe("bun");
+  });
+
+  it("returns bun when bun.lock (text format, Bun 1.2+) is present", async () => {
+    await writeFile(join(root, "bun.lock"), "", "utf8");
     expect(await detectPackageManager(root)).toBe("bun");
   });
 

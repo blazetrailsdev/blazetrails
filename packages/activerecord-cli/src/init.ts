@@ -99,6 +99,7 @@ export type PackageManager = "pnpm" | "yarn" | "bun" | "npm";
 const LOCKFILES: ReadonlyArray<[string, PackageManager]> = [
   ["pnpm-lock.yaml", "pnpm"],
   ["yarn.lock", "yarn"],
+  ["bun.lock", "bun"],
   ["bun.lockb", "bun"],
   ["package-lock.json", "npm"],
 ];
@@ -144,7 +145,7 @@ export async function addDepsToPackageJson(
   const pkg = JSON.parse(raw) as { dependencies?: Record<string, string>; [k: string]: unknown };
 
   const indentMatch = raw.match(/\n(\s+)/);
-  const indent = indentMatch ? indentMatch[1].length : 2;
+  const indent = indentMatch ? indentMatch[1] : "  ";
 
   if (!pkg.dependencies) pkg.dependencies = {};
 

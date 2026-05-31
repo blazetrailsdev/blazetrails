@@ -103,7 +103,17 @@ export class SQLiteDatabaseTasks {
 
   private async disconnect(): Promise<void> {
     try {
-      Base.connectionPool().disconnect();
+      const pool = Base.connectionPool();
+      // Await async close() before pool.disconnect() fires disconnectBang()
+      // synchronously — for async SQLite drivers (wasm/sqlite-wasm) the sync
+      // path in disconnectBang() does not await driver.close() (#1269).
+      try {
+        const conn = pool.leaseConnection() as { close?: () => Promise<void> };
+        if (typeof conn.close === "function") await conn.close();
+      } catch {
+        // no active connection in pool to close
+      }
+      pool.disconnect();
     } catch {
       // best effort
     }
@@ -276,14 +286,25 @@ export class SQLiteDatabaseTasks {
   }
 
   /**
-   * For in-memory databases the pool connection IS the database — opening a
-   * fresh adapter creates an unrelated empty DB. For file-backed databases a
-   * fresh adapter is correct and doesn't require the pool to be established.
-   * `owned` tells callers whether to close the adapter (pool connections must
-   * not be closed by the caller).
+   * For in-memory databases opening a fresh adapter creates an unrelated empty
+   * DB, so we must reuse the established migration connection. We first check
+   * the shim adapter (DatabaseTasks.migrationConnection — still active while
+   * callers like trailties use setAdapter), then fall back to the pool-leased
+   * connection. For file-backed databases a fresh per-call adapter is correct
+   * and doesn't require a pool to be established.
+   *
+   * `owned` tells callers whether to close the adapter: borrowed connections
+   * (pool or shim) must not be closed by the caller.
    */
   private async adapterForOperation(): Promise<{ adapter: DatabaseAdapter; owned: boolean }> {
     if (isInMemoryDatabase(this.resolveDbPath())) {
+      const migration = DatabaseTasks.migrationConnection();
+      if (
+        migration &&
+        (migration as { adapterName?: string }).adapterName?.toLowerCase().includes("sqlite")
+      ) {
+        return { adapter: migration, owned: false };
+      }
       return { adapter: await this.connection(), owned: false };
     }
     return { adapter: await this.connectAdapter(), owned: true };
@@ -296,16 +317,13 @@ export class SQLiteDatabaseTasks {
 
   /** @internal */
   private async establishConnection(config?: DatabaseConfig): Promise<void> {
-    if (config != null) {
-      await Base.establishConnection(
-        config.configuration as { adapter?: string; [key: string]: unknown },
-      );
-    } else {
-      await Base.establishConnection({
-        ...this.dbConfig.configuration,
-        database: this.resolveDbPath(),
-      } as { adapter?: string; [key: string]: unknown });
-    }
+    // Always go through resolveDbPath so relative paths are joined against
+    // DatabaseTasks.root and missing database values default to ':memory:'.
+    const tasks = config != null ? new SQLiteDatabaseTasks(config, this.root) : this;
+    await Base.establishConnection({
+      ...tasks.dbConfig.configuration,
+      database: tasks.resolveDbPath(),
+    } as { adapter?: string; [key: string]: unknown });
   }
 
   static register(): void {

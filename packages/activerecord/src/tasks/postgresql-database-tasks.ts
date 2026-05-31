@@ -362,13 +362,14 @@ export class PostgreSQLDatabaseTasks {
   private publicSchemaConfig(): ConfigHash {
     const c = this.configurationHash;
     if (c.url) {
-      // For URL-only configs, mutate the URL to point at the postgres system DB
-      // so buildAdapterArg receives a single URL string (no conflicting `database`
-      // key). Spreading `database: "postgres"` alongside `url` causes
-      // buildAdapterArg to discard the URL and build from a host-less hash.
+      // Modify the URL to target the postgres system DB and strip `database`
+      // from the spread. buildAdapterArg uses the URL path when `database` is
+      // undefined; if `database` remains in the hash it discards the URL and
+      // builds a host-less config instead.
       const parsed = new URL(String(c.url));
       parsed.pathname = "/postgres";
-      return { ...c, url: parsed.toString() };
+      const { database: _db, ...rest } = c;
+      return { ...rest, url: parsed.toString() };
     }
     return { ...c, database: "postgres", schemaSearchPath: "public" };
   }

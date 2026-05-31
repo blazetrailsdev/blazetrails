@@ -12,7 +12,7 @@ import Database from "better-sqlite3";
 // generated module shape or exit behaviour.
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(SCRIPT_DIR, "../../../../..");
+const REPO_ROOT = resolve(SCRIPT_DIR, "../../../..");
 const BIN_PATH = join(SCRIPT_DIR, "trails-models-dump-bin.ts");
 const TSX_BIN = resolve(
   REPO_ROOT,

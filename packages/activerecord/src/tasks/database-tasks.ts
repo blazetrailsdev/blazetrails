@@ -277,11 +277,11 @@ export class DatabaseTasks {
       if (effectiveVersion !== null && effectiveVersion !== undefined) {
         const targetKey = String(BigInt(effectiveVersion));
         filter = (m) => String(BigInt(m.version)) === targetKey;
-      } else if (scope !== undefined && scope !== "") {
+      } else if (scope !== undefined && scope.trim() !== "") {
         filter = (m) => m.scope === scope;
       }
       const ran = await migrator.migrate(effectiveVersion ?? null, filter);
-      if (scope && ran.length === 0 && verbose) {
+      if (scope && scope.trim() !== "" && ran.length === 0 && verbose) {
         Migration.logger.info(`No migrations ran. (using ${scope} scope)`);
       }
       // Rails: `migration_connection_pool.schema_cache.clear!` — drop the

@@ -108,7 +108,7 @@ export const ERB_SKIP_SENTINEL = "__ERB_SKIP__";
 
 // Baseline locked at PR #2712 (93% milestone). Bump match when new fixtures
 // are ported; bump diff only for intentional accepted drifts. missing must stay 0.
-const CI_BASELINE = { match: 62, diff: 1, missing: 0 } as const;
+const CI_BASELINE = { match: 113, diff: 6, missing: 0 } as const;
 
 function parseArgs(argv: string[]): {
   pkg: string;

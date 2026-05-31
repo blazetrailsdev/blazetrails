@@ -25,25 +25,44 @@ Files: `tasks/database-tasks.ts`.
 
 ---
 
-### P2-2 — `createAll`/`dropAll` missing re-establish_connection (~20 LOC)
+### P2-2 — `createAll` missing re-establish_connection (~10 LOC)
 
 **Source:** PR #2706 post-merge findings.
 
-Rails calls `Base.establish_connection(db_config)` after each create/drop to
-refresh the pool entry. Our `createAll`/`dropAll` skip this, leaving the
-handler pointing at a stale config.
+Rails `create_all` captures the current `migration_connection.pool.db_config`
+before iterating and calls `migration_class.establish_connection(db_config)`
+after all creates, restoring the pool to the original config. Our `createAll`
+skips this, leaving the handler pointing at whatever config was last created.
+(`drop_all` in Rails does not re-establish — only `create_all` does.)
 
 Files: `tasks/database-tasks.ts`.
 
 ---
 
-### P2-3 — `prepareAll` version-sort + post-migrate dump_schema (~15 LOC)
+### P2-3 — `dbConfigsWithVersions` / `prepareAll` / `migrateAll` behavioral fidelity (~60 LOC)
 
-**Source:** PR #2706 post-merge findings.
+**Source:** PR #2706 post-merge findings; verified against Rails source.
 
-Rails sorts configs by version in `db_configs_with_versions` before iterating,
-and runs `dump_schema(config)` after each successful migrate step when
-`dumpSchemaAfterMigration` is set. Our `prepareAll` does neither.
+Three interrelated gaps:
+
+1. **`dbConfigsWithVersions`** groups by `envName` instead of querying
+   `pool.migration_context.pending_migration_versions` per config as Rails does.
+   Rails returns a `version → db_configs[]` map; ours returns an `envName → configs[]`
+   map. This is foundational — `prepareAll` and `migrateAll` both depend on it.
+
+2. **`migrateAll`** calls `initialize_database` before iterating (Rails does
+   `db_configs.each { |c| initialize_database(c) }` before the single-primary
+   fast path or the version-sorted loop). Our implementation skips this entirely
+   and should pass `skipInitialize: true` to `migrate` once P2-1 lands.
+
+3. **`prepareAll`** differs from Rails in structure: Rails calls
+   `initialize_database` (not `create`) per config, then iterates
+   `db_configs_with_versions(environment).sort` inside
+   `each_current_environment`, calling `with_temporary_pool(db_config) { migrate(version) }`
+   for each version/config pair, then runs a post-migrate `dump_schema` pass
+   when `dumpSchemaAfterMigration` is set. Our `prepareAll` uses `create` + `migrateAll`.
+
+Fix these three together once P2-1 (`skipInitialize`) is in place.
 
 Files: `tasks/database-tasks.ts`.
 
@@ -121,8 +140,10 @@ Files: `tasks/database-tasks.test.ts`.
 
 ## Bundling guidance
 
-P2-1 + P2-2 + P2-3 are thematically related (`migrate`/`createAll`/`dropAll`/
-`prepareAll` behavioral fidelity) and together fit within the 300 LOC ceiling.
+P2-1 must land first (adds `skipInitialize`). P2-3 depends on P2-1 and together
+they exceed 300 LOC — ship P2-1 standalone, then P2-2 + P2-3 together (~80 LOC).
+P2-1 + P2-2 + P2-3 are thematically related (`migrate`/`createAll`/`prepareAll`/
+`migrateAll`/`dbConfigsWithVersions` behavioral fidelity).
 P2-4 + P2-5 are small and can be bundled together. P2-6 and P2-7 are
 independent cleanups that can go separately or bundled with any of the above.
 P2-8 is a follow-up audit, not its own story — attach to whichever PR closes

@@ -45,18 +45,14 @@ const rule = {
     return {
       ImportDeclaration(node) {
         for (const spec of node.specifiers) {
-          if (
-            spec.type === "ImportSpecifier" &&
-            /SCHEMA$/.test(spec.imported?.name ?? "")
-          ) {
+          if (spec.type === "ImportSpecifier" && /SCHEMA$/.test(spec.imported?.name ?? "")) {
             schemaVar ??= spec.local.name;
           }
         }
       },
 
       CallExpression(node) {
-        const calleeName =
-          node.callee?.type === "Identifier" ? node.callee.name : null;
+        const calleeName = node.callee?.type === "Identifier" ? node.callee.name : null;
         if (calleeName !== "useFixtures") return;
 
         const firstArg = node.arguments[0];
@@ -88,11 +84,7 @@ const rule = {
       // Track any identifier call that looks like an accessor: foo("bar") where
       // foo matches a known accessor name. Record these per containing describe body.
       "CallExpression:exit"(node) {
-        if (
-          node.callee?.type !== "Identifier" ||
-          node.arguments.length === 0
-        )
-          return;
+        if (node.callee?.type !== "Identifier" || node.arguments.length === 0) return;
         // Check if this call is inside an it()/test() body.
         if (!isInsideItBody(node)) return;
         const name = node.callee.name;
@@ -119,8 +111,7 @@ const rule = {
 
           const lastArg = node.arguments[node.arguments.length - 1];
           const hasEmptyOpts =
-            lastArg?.type === "ObjectExpression" &&
-            lastArg.properties.length === 0;
+            lastArg?.type === "ObjectExpression" && lastArg.properties.length === 0;
 
           context.report({
             node,
@@ -146,10 +137,7 @@ function extractDestructuredNames(callNode) {
   const parent = callNode.parent;
   if (!parent) return [];
   // const { foo } = useFixtures(...)
-  if (
-    parent.type === "VariableDeclarator" &&
-    parent.id?.type === "ObjectPattern"
-  ) {
+  if (parent.type === "VariableDeclarator" && parent.id?.type === "ObjectPattern") {
     return parent.id.properties
       .filter((p) => p.type === "Property" && p.value?.type === "Identifier")
       .map((p) => p.value.name);
@@ -191,8 +179,7 @@ function nearestDescribeBody(node) {
       const cb = cur.arguments[cur.arguments.length - 1];
       if (
         cb &&
-        (cb.type === "ArrowFunctionExpression" ||
-          cb.type === "FunctionExpression") &&
+        (cb.type === "ArrowFunctionExpression" || cb.type === "FunctionExpression") &&
         cb.body?.type === "BlockStatement"
       )
         return cb.body;

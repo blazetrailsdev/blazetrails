@@ -1,4 +1,5 @@
 import { join, resolve } from "path";
+import { getFsAsync } from "@blazetrails/activesupport";
 import {
   DatabaseTasks,
   DatabaseConfigurations,
@@ -12,7 +13,12 @@ import {
  */
 async function loadDatabaseConfig(cwd: string): Promise<DatabaseConfigurations> {
   const configPath = resolve(join(cwd, "config", "database.ts"));
-  const mod = await import(configPath);
+  const fsAdapter = await getFsAsync();
+  if (!fsAdapter.existsSync(configPath)) {
+    throw new Error(`config/database.ts not found at ${configPath}`);
+  }
+  const { pathToFileURL } = await import("node:url");
+  const mod = await import(pathToFileURL(configPath).href);
   const raw = mod.default ?? mod;
   const configs = DatabaseConfigurations.fromRaw(raw);
   DatabaseTasks.databaseConfiguration = configs;
@@ -66,21 +72,13 @@ export async function dbCreate(cwd: string, args: string[]): Promise<number> {
     return 1;
   }
 
-  const env = all ? undefined : (DatabaseConfigurations.defaultEnv ?? "development");
   let ok = true;
-
-  if (all) {
-    const configs = DatabaseTasks.eachLocalConfiguration();
-    for (const config of configs) {
-      if (!(await runCreate(config))) ok = false;
-    }
-  } else {
-    const configs = DatabaseTasks.configsFor(env!);
-    for (const config of configs) {
-      if (!(await runCreate(config))) ok = false;
-    }
+  const configs = all
+    ? DatabaseTasks.eachLocalConfiguration()
+    : DatabaseTasks.configsFor(DatabaseConfigurations.defaultEnv ?? "development");
+  for (const config of configs) {
+    if (!(await runCreate(config))) ok = false;
   }
-
   return ok ? 0 : 1;
 }
 
@@ -93,20 +91,12 @@ export async function dbDrop(cwd: string, args: string[]): Promise<number> {
     return 1;
   }
 
-  const env = all ? undefined : (DatabaseConfigurations.defaultEnv ?? "development");
   let ok = true;
-
-  if (all) {
-    const configs = DatabaseTasks.eachLocalConfiguration();
-    for (const config of configs) {
-      if (!(await runDrop(config))) ok = false;
-    }
-  } else {
-    const configs = DatabaseTasks.configsFor(env!);
-    for (const config of configs) {
-      if (!(await runDrop(config))) ok = false;
-    }
+  const configs = all
+    ? DatabaseTasks.eachLocalConfiguration()
+    : DatabaseTasks.configsFor(DatabaseConfigurations.defaultEnv ?? "development");
+  for (const config of configs) {
+    if (!(await runDrop(config))) ok = false;
   }
-
   return ok ? 0 : 1;
 }

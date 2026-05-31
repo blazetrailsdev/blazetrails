@@ -259,7 +259,6 @@ export async function dbSetup(cwd: string, _args: string[]): Promise<number> {
     return 1;
   }
   await tryLoadModels(cwd);
-  loadMigrations(cwd);
   installSeedLoader(cwd);
 
   const env = DatabaseConfigurations.currentEnv();

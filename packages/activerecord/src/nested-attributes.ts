@@ -480,7 +480,6 @@ export const InstanceMethods = {
   findRecordById,
   raiseNestedAttributesRecordNotFoundBang,
   checkRecordLimitBang,
-  isPolymorphicBelongsTo,
   assignNestedAttributesForOneToOneAssociation,
   assignNestedAttributesForCollectionAssociation,
 };

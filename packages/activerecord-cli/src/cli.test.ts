@@ -84,6 +84,18 @@ describe("ArCliTest", () => {
     expect(await readFile(join(models, "index.ts"), "utf8")).toContain(`import { User }`);
   });
 
+  it("--check drift message echoes the custom --root in the suggested fix", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ar-cli-"));
+    await mkdir(join(dir, "src", "models"), { recursive: true });
+    await writeFile(
+      join(dir, "src", "models", "user.ts"),
+      `import { Base } from "@blazetrails/activerecord";\nexport class User extends Base {}\n`,
+      "utf8",
+    );
+    expect(await run(["generate:manifest", "--check", "--root", "src/models"], dir)).toBe(1);
+    expect(err.join("\n")).toContain("Run `ar generate:manifest --root src/models`");
+  });
+
   it("fails fast when --root is given without a directory argument", async () => {
     expect(await run(["generate:manifest", "--root"], ".")).toBe(1);
     expect(err.join("\n")).toContain("--root requires a directory");

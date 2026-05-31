@@ -159,15 +159,18 @@ export { Follow, Like, Tweet, User };
 ```
 
 (Entries are emitted in stable alphabetical order; `ar generate model <name>`
-will append to this same file in a later slice.)
+will splice a new entry into this same file at its sorted position in a later
+slice.)
 
 - Model files stay **pure** (associations / scopes / validations only — no
   `declare`, no `this.attribute`, no `registerModel`).
 - **Generators are incremental, not scanning.** `ar generate model Tweet`
-  knows the name; it writes `app/models/tweet.ts` and **appends** the
-  import/register/export lines to `app/models/index.ts`. No project scan needed
-  for the common path (mirrors Rails generators, which also don't scan —
-  autoload covers discovery, our append covers it).
+  knows the name; it writes `app/models/tweet.ts` and **inserts** the
+  import/register/export lines into `app/models/index.ts` at the spot that
+  keeps it alphabetically sorted (so the file stays byte-identical to a full
+  regenerate — no append-out-of-order drift). No project scan needed for the
+  common path (mirrors Rails generators, which also don't scan — autoload
+  covers discovery, our sorted insert covers it).
 - A **full scan** is needed only by `ar init` (adopt a pre-existing `models/`
   dir) and an optional `ar models:manifest --rebuild`/verify. Those reuse the
   **model-scanner that moves into `activerecord-cli` alongside the generator**
@@ -269,7 +272,7 @@ the relocated type-tooling (§4.8):
 | Command                                   | Notes                                                           |
 | ----------------------------------------- | --------------------------------------------------------------- |
 | `ar init`                                 | scaffold config/db dirs, empty manifest, glue                   |
-| `ar generate model <Name> [field:type …]` | write model + migration; append to manifest                     |
+| `ar generate model <Name> [field:type …]` | write model + migration; insert into manifest (sorted)          |
 | `ar generate migration <Name>`            | timestamped migration stub                                      |
 | `ar db:create` / `db:drop`                | via `DatabaseTasks`                                             |
 | `ar db:migrate` / `db:rollback [n]`       | run migrations; dump schema-columns.json                        |

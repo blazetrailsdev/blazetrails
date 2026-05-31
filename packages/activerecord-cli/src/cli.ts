@@ -99,7 +99,12 @@ export async function run(argv: string[], cwd: string): Promise<number> {
     const { path, changed } = await generateManifest(modelsDir, { check });
     if (check) {
       if (changed) {
-        console.error(`ar: ${path} is out of date. Run \`ar generate:manifest\`.`);
+        // Echo back `--root` so the suggested fix regenerates the directory
+        // that was actually checked, not the default `app/models`.
+        const fix = root.value
+          ? `ar generate:manifest --root ${root.value}`
+          : "ar generate:manifest";
+        console.error(`ar: ${path} is out of date. Run \`${fix}\`.`);
         return 1;
       }
       console.log(`  ok      ${path} is up to date`);

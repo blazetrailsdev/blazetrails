@@ -154,10 +154,15 @@ export async function destroyModel(
   if (!options.dryRun) {
     if (modelPresent) await safeUnlink(modelPath);
     if (migrationPath !== undefined) await safeUnlink(migrationPath);
-    // Only regenerate manifest when the model file existed — it can only appear
-    // in the manifest if it was present. Skipping also avoids the ENOENT thrown
-    // by generateManifest when app/models doesn't exist (migration-only cleanup).
-    if (modelPresent) await generateManifest(join(root, "app", "models"));
+    // Regenerate manifest when the model was present (models dir guaranteed to
+    // exist) OR when the manifest already exists (stale import after manual
+    // model deletion). Skipping both avoids the plain Error generateManifest
+    // throws when the models dir doesn't exist at all (migration-only project).
+    const modelsDir = join(root, "app", "models");
+    const manifestExists = (await readIfPresent(join(modelsDir, "index.ts"))) !== undefined;
+    if (modelPresent || manifestExists) {
+      await generateManifest(modelsDir);
+    }
   }
 
   return { modelPath, migrationPath, deleted: true, modelDeleted: modelPresent };

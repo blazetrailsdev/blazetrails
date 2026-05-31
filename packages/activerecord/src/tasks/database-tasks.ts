@@ -996,9 +996,10 @@ export class DatabaseTasks {
       const { ConnectionNotDefined } = await import("../errors.js");
       if (!(error instanceof ConnectionNotDefined)) throw error;
     }
-    await Base.establishConnection(config.configuration as Record<string, unknown>);
-    const pool = Base.connectionPool();
+    // Mirrors Rails' `ensure` which restores even if establish_connection raises.
     try {
+      await Base.establishConnection(config.configuration as Record<string, unknown>);
+      const pool = Base.connectionPool();
       return await fn(pool);
     } finally {
       if (priorConfig !== null) {

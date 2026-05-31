@@ -54,13 +54,14 @@ describe("tableless useFixtures (naked/yml)", () => {
   });
 
   // test_yaml_file_with_invalid_column — parrots.yml has columns "arrr" and "foobar"
-  // that do not exist on the parrots table. Rails raises FixtureError.
-  // Trails: defineJoinTableFixtures throws an unknown-column error at seed time.
+  // that do not exist on the parrots table.
+  // Rails: table "parrots" has no columns named "arrr", "foobar".
+  // Trails: mirrors the same error format, reporting all invalid columns at once.
   describe("test_yaml_file_with_invalid_column", () => {
-    it("throws when a fixture row references a column not present in the table", async () => {
+    it("raises with Rails-mirrored message listing all unknown columns", async () => {
       await expect(
         defineJoinTableFixtures(Base.connection, "parrots", nakedYmlParrotsFixtureData),
-      ).rejects.toThrow(/unknown column|not present in the table schema/i);
+      ).rejects.toThrow('table "parrots" has no columns named "arrr", "foobar".');
     });
   });
 

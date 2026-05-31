@@ -351,6 +351,18 @@ reference (#2638).
 
 **Ready now:**
 
+- [ ] **§4.8 full bin + library relocation** — promote the light delegation
+      from #2709 to the documented end-state. Move the `trails-schema-dump`
+      and `trails-models-dump` source modules + bin entries out of
+      `activerecord` and into `activerecord-cli` so they LIVE there (not
+      just delegate). Drop the duplicate bin entries from
+      `activerecord/package.json`. The same full-move for `trails-tsc` is
+      gated on resolving the dev-only cycle (`activerecord` devDep →
+      `activerecord-cli` → `activerecord`) — split that into a follow-up;
+      `trails-schema-dump` / `trails-models-dump` do not participate in the
+      AR self-test cycle and are safe to fully relocate now.
+      `test:types:virtualized` and `trailties` invocations updated.
+
 - [x] Done (#2657) — **§6.2 `_abstractClass` own-property fix**. Routed the three
       un-guarded `_abstractClass` reads in `model-schema.ts` (`resetTableName` :392,
       `loadSchemaFromAdapter` :819, `loadSchemaFromCacheSync` :890) through

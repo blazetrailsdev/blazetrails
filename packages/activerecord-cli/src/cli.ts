@@ -15,7 +15,7 @@ Commands:
   models:dump          Dump model metadata via trails-models-dump
 
 Coming in later slices: the db:* commands (create, drop, migrate, rollback,
-migrate:status, seed, setup, prepare, reset).
+migrate:status, seed, schema:dump, setup, prepare, reset).
 
 Run \`ar <command> --help\` for command-specific help.`;
 

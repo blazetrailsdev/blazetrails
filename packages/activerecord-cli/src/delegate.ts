@@ -1,5 +1,6 @@
 import { spawnSync } from "child_process";
 import { createRequire } from "module";
+import { dirname, join } from "path";
 
 /**
  * Resolves the absolute path of a bin entry from a package using Node's module
@@ -15,8 +16,8 @@ export function delegateBin(pkg: string, binName: string, args: string[]): numbe
     process.stderr.write(`ar: could not find bin "${binName}" in ${pkg}\n`);
     return 1;
   }
-  const pkgRoot = req.resolve(`${pkg}/package.json`).replace(/\/package\.json$/, "");
-  const binPath = `${pkgRoot}/${rel}`;
+  const pkgRoot = dirname(req.resolve(`${pkg}/package.json`));
+  const binPath = join(pkgRoot, rel);
   const result = spawnSync(process.execPath, [binPath, ...args], {
     stdio: "inherit",
   });

@@ -189,49 +189,6 @@ function isTableMissingError(e: unknown): boolean {
 }
 
 /**
- * Vitest helper that inserts fixture rows in a `beforeEach` and cleans them up in `afterEach`.
- *
- * Returns an object of typed accessor functions — one per fixture set. Each accessor is callable
- * by label (`topics("first")`) and has an `.all()` method.
- *
- * ```ts
- * const { topics, posts } = useFixtures(
- *   { topics: [Topic, topicData], posts: [Post, postData] },
- *   () => adapter,
- * );
- * ```
- *
- * Or by Rails-style fixture-set name, resolved through `fixtures-registry.ts`:
- *
- * ```ts
- * const { authors, posts } = useFixtures(["authors", "posts"], () => adapter);
- * authors("david"); // → Author instance
- * ```
- *
- * Subdirectory fixture sets use slash-keyed names; access via bracket notation.
- * Once the set is registered in `fixtures-registry.ts` (Phase 2+), the names
- * overload works too. Until then, use the object-map overload:
- *
- * ```ts
- * const fixtures = useFixtures(
- *   { "admin/accounts": [AdminAccount, adminAccountFixtureData] },
- *   () => adapter,
- * );
- * fixtures["admin/accounts"]("signals37"); // → Admin::Account instance
- * ```
- *
- * Pass `{ schema }` to skip the manual `defineSchema` step: `useFixtures` derives the
- * minimal sub-schema for the requested sets (see {@link deriveFixtureSchema}) and
- * creates those tables in a `beforeAll`. Hand it the whole `TEST_SCHEMA` and it picks
- * out only what it needs:
- *
- * ```ts
- * setupHandlerSuite();
- * useHandlerTransactionalFixtures();
- * const { customers } = useFixtures(["customers"], () => Base.connection, { schema: TEST_SCHEMA });
- * ```
- */
-/**
  * Result of the tableless overload: one `JoinTableAccessor` per entry, keyed by `table`.
  * The label union is derived from `entry.data`'s own keys so `accessor("root")` is
  * compile-time checked when the data literal is inlined (same pattern as the by-name overload).
@@ -319,6 +276,49 @@ function useTablelessFixtures(
   return result;
 }
 
+/**
+ * Vitest helper that inserts fixture rows in a `beforeEach` and cleans them up in `afterEach`.
+ *
+ * Returns an object of typed accessor functions — one per fixture set. Each accessor is callable
+ * by label (`topics("first")`) and has an `.all()` method.
+ *
+ * ```ts
+ * const { topics, posts } = useFixtures(
+ *   { topics: [Topic, topicData], posts: [Post, postData] },
+ *   () => adapter,
+ * );
+ * ```
+ *
+ * Or by Rails-style fixture-set name, resolved through `fixtures-registry.ts`:
+ *
+ * ```ts
+ * const { authors, posts } = useFixtures(["authors", "posts"], () => adapter);
+ * authors("david"); // → Author instance
+ * ```
+ *
+ * Subdirectory fixture sets use slash-keyed names; access via bracket notation.
+ * Once the set is registered in `fixtures-registry.ts` (Phase 2+), the names
+ * overload works too. Until then, use the object-map overload:
+ *
+ * ```ts
+ * const fixtures = useFixtures(
+ *   { "admin/accounts": [AdminAccount, adminAccountFixtureData] },
+ *   () => adapter,
+ * );
+ * fixtures["admin/accounts"]("signals37"); // → Admin::Account instance
+ * ```
+ *
+ * Pass `{ schema }` to skip the manual `defineSchema` step: `useFixtures` derives the
+ * minimal sub-schema for the requested sets (see {@link deriveFixtureSchema}) and
+ * creates those tables in a `beforeAll`. Hand it the whole `TEST_SCHEMA` and it picks
+ * out only what it needs:
+ *
+ * ```ts
+ * setupHandlerSuite();
+ * useHandlerTransactionalFixtures();
+ * const { customers } = useFixtures(["customers"], () => Base.connection, { schema: TEST_SCHEMA });
+ * ```
+ */
 export function useFixtures<M extends FixtureMap>(
   fixtures: M,
   getAdapter: () => DatabaseAdapter,
@@ -369,6 +369,24 @@ export function useFixtures(
       getAdapter,
       opts,
     );
+  }
+  // Symmetric guard: if the first element is a by-name string, scan remaining elements
+  // for any tableless { table, data } object. A mixed array here would reach
+  // resolveFixtureNames with an object, producing a confusing "no registry entry" error.
+  if (
+    Array.isArray(fixturesOrNames) &&
+    fixturesOrNames.length > 1 &&
+    typeof (fixturesOrNames as readonly unknown[])[0] === "string"
+  ) {
+    for (let i = 1; i < (fixturesOrNames as readonly unknown[]).length; i++) {
+      const el = (fixturesOrNames as readonly unknown[])[i];
+      if (typeof el === "object" && el !== null && "table" in (el as object)) {
+        throw new Error(
+          `useFixtures: mixed tableless and by-name entries are not supported. ` +
+            `Element at index ${i} is a tableless { table, data } entry but the array started with a by-name string.`,
+        );
+      }
+    }
   }
   const isNameArray = Array.isArray(fixturesOrNames);
   // Keys are known synchronously (the names, or the map's own keys) so accessors

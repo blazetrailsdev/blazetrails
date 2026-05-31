@@ -717,7 +717,7 @@ export async function defineJoinTableFixtures(
   for (const [label, attrs] of Object.entries(fixtures)) {
     const row: FixtureAttrs = {};
     if (columnNames) {
-      const unknown = Object.keys(attrs).filter((col) => !columnNames!.has(col));
+      const unknown = Object.keys(attrs).filter((col) => !columnNames.has(col));
       if (unknown.length > 0) {
         // Mirrors Rails' build_fixture_sql error format (database_statements.rb):
         // table "X" has no columns named "a", "b".

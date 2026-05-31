@@ -97,35 +97,42 @@ describe("SQLiteDatabaseTasks", () => {
       database: dbPath,
     });
 
-    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
-    const seedAdapter = new SQLite3Adapter(dbPath);
-    await seedAdapter.executeMutation(
+    const { Base } = await import("../base.js");
+
+    // Seed the source DB via its pool so structureDump can lease the connection.
+    await Base.establishConnection({ adapter: "sqlite3", database: dbPath });
+    const seedConn = Base.connectionPool().leaseConnection();
+    await seedConn.executeMutation(
       "CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT NOT NULL, updated_at TEXT)",
     );
-    await seedAdapter.executeMutation("CREATE INDEX index_widgets_on_name ON widgets(name)");
-    await seedAdapter.executeMutation(
+    await seedConn.executeMutation("CREATE INDEX index_widgets_on_name ON widgets(name)");
+    await seedConn.executeMutation(
       "CREATE TRIGGER touch_widgets AFTER UPDATE ON widgets " +
         "BEGIN " +
         "UPDATE widgets SET updated_at = datetime('now') WHERE id = NEW.id; " +
         "END",
     );
-    await (seedAdapter as unknown as { close(): Promise<void> }).close();
 
     await new SQLiteDatabaseTasks(sourceConfig).structureDump(dumpPath);
+    Base.connectionPool().disconnect();
 
     const dumped = fs.readFileSync(dumpPath, "utf8");
     expect(dumped).toMatch(/CREATE TABLE widgets/);
     expect(dumped).toMatch(/index_widgets_on_name/);
     expect(dumped).toMatch(/CREATE TRIGGER touch_widgets/);
 
+    // Establish pool for the target DB so structureLoad can lease the connection.
+    fs.writeFileSync(loadDbPath, "");
     const targetConfig = new HashConfig("development", "primary", {
       adapter: "sqlite3",
       database: loadDbPath,
     });
-    fs.writeFileSync(loadDbPath, "");
+    await Base.establishConnection({ adapter: "sqlite3", database: loadDbPath });
     await new SQLiteDatabaseTasks(targetConfig).structureLoad(dumpPath);
 
+    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
     const loadedAdapter = new SQLite3Adapter(loadDbPath);
+    Base.connectionPool().disconnect();
     try {
       const tables = (await loadedAdapter.execute(
         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",

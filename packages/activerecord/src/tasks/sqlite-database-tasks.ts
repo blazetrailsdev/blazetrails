@@ -103,8 +103,7 @@ export class SQLiteDatabaseTasks {
   private async disconnect(): Promise<void> {
     try {
       const { Base } = await import("../base.js");
-      const existing = (Base as unknown as { adapter?: { close?: () => Promise<void> } }).adapter;
-      if (existing && typeof existing.close === "function") await existing.close();
+      Base.connectionPool().disconnect();
     } catch {
       // best effort
     }
@@ -112,8 +111,7 @@ export class SQLiteDatabaseTasks {
 
   private async reconnect(): Promise<void> {
     try {
-      const { Base } = await import("../base.js");
-      await Base.establishConnection({ adapter: "sqlite3", database: this.resolveDbPath() });
+      await this.establishConnection();
     } catch {
       // best effort
     }
@@ -125,17 +123,7 @@ export class SQLiteDatabaseTasks {
 
   async structureDump(filename: string, extraFlags?: string | string[] | null): Promise<void> {
     void extraFlags;
-    // Reuse the migration adapter when one is registered. Two reasons:
-    //   1. ":memory:" sqlite DBs are not shared across connections — a
-    //      fresh adapter sees an empty DB, dumps nothing, and any later
-    //      _appendSchemaInformation call (which runs against the
-    //      migration adapter) writes INSERTs into a structureless dump
-    //      that fails to load.
-    //   2. Even for file-backed sqlite, reusing the active connection
-    //      keeps WAL + transaction state consistent with what the
-    //      caller has already written, matching Rails where structure
-    //      dumping uses the established pool's connection.
-    const { adapter, owned } = await this.adapterForRead();
+    const adapter = await this.connection();
     try {
       const { SchemaDumper } = await import("../connection-adapters/abstract/schema-dumper.js");
       const ignoreTables = SchemaDumper.ignoreTables;
@@ -187,33 +175,14 @@ export class SQLiteDatabaseTasks {
       const output = rows.map((r) => String(r.sql ?? "")).join("\n");
       getFs().writeFileSync(filename, output);
     } finally {
-      if (owned) await this.closeAdapter(adapter);
+      // Pool-leased connection — lifecycle managed by the pool.
     }
-  }
-
-  /**
-   * Use DatabaseTasks.migrationConnection() if it points to a SQLite
-   * adapter, falling back to a fresh per-call adapter otherwise.
-   * `owned` tells the caller whether to close the returned adapter:
-   * borrowed connections must be left alone, freshly-opened ones must
-   * be closed.
-   */
-  private async adapterForRead(): Promise<{ adapter: DatabaseAdapter; owned: boolean }> {
-    const { DatabaseTasks } = await import("./database-tasks.js");
-    const migration = DatabaseTasks.migrationConnection();
-    if (
-      migration &&
-      (migration as { adapterName?: string }).adapterName?.toLowerCase().includes("sqlite")
-    ) {
-      return { adapter: migration, owned: false };
-    }
-    return { adapter: await this.connectAdapter(), owned: true };
   }
 
   async structureLoad(filename: string, extraFlags?: string | string[] | null): Promise<void> {
     void extraFlags;
     const sql = getFs().readFileSync(filename, "utf8");
-    const adapter = await this.connectAdapter();
+    const adapter = await this.connection();
     try {
       // SQLite's `db.exec` runs an entire script in one shot, so it's safe
       // for dumps containing trigger bodies (CREATE TRIGGER ... BEGIN ...;
@@ -227,7 +196,7 @@ export class SQLiteDatabaseTasks {
         }
       }
     } finally {
-      await this.closeAdapter(adapter);
+      // Pool-leased connection — lifecycle managed by the pool.
     }
   }
 
@@ -247,7 +216,7 @@ export class SQLiteDatabaseTasks {
    * the PG/MySQL truncateAll implementations provide.
    */
   async truncateAll(): Promise<void> {
-    const adapter = await this.connectAdapter();
+    const adapter = await this.connection();
     try {
       const rows = (await adapter.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' " +
@@ -279,7 +248,7 @@ export class SQLiteDatabaseTasks {
         await run();
       }
     } finally {
-      await this.closeAdapter(adapter);
+      // Pool-leased connection — lifecycle managed by the pool.
     }
   }
 
@@ -297,26 +266,17 @@ export class SQLiteDatabaseTasks {
     return path.join(this.root, database);
   }
 
-  private async connectAdapter(): Promise<DatabaseAdapter> {
-    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
-    return new SQLite3Adapter(this.resolveDbPath());
-  }
-
-  private async closeAdapter(adapter: DatabaseAdapter): Promise<void> {
-    const close = (adapter as { close?: () => Promise<void> }).close;
-    if (typeof close === "function") await close.call(adapter);
-  }
-
-  /** @internal */
-  private connection(): DatabaseAdapter | null {
-    return DatabaseTasks.migrationConnection();
+  private async connection(): Promise<DatabaseAdapter> {
+    const { Base } = await import("../base.js");
+    return Base.connectionPool().leaseConnection();
   }
 
   /** @internal */
   private async establishConnection(config?: DatabaseConfig): Promise<void> {
-    const tasks = config ? new SQLiteDatabaseTasks(config, this.root) : this;
-    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
-    DatabaseTasks.setAdapter(new SQLite3Adapter(tasks.resolveDbPath()));
+    const { Base } = await import("../base.js");
+    await Base.establishConnection(
+      (config ?? this.dbConfig).configuration as { adapter?: string; [key: string]: unknown },
+    );
   }
 
   static register(): void {

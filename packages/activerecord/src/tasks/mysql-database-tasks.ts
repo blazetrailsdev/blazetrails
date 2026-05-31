@@ -75,8 +75,9 @@ export class MySQLDatabaseTasks {
     const collation = opts.collation ? ` COLLATE \`${this.escapeIdent(opts.collation)}\`` : "";
     const dbName = this.requireDatabaseName();
     const sql = `CREATE DATABASE \`${this.escapeIdent(dbName)}\`${charset}${collation}`;
+    await this.establishConnection(this.configurationHashWithoutDatabase());
     try {
-      await this.withAdmin((admin) => admin.executeMutation(sql));
+      await (await this.connection()).executeMutation(sql);
     } catch (error) {
       if (isMySQLDatabaseExistsError(error)) {
         throw new DatabaseAlreadyExists(`Database '${dbName}' already exists`, {
@@ -86,13 +87,15 @@ export class MySQLDatabaseTasks {
       }
       throw error;
     }
+    await this.establishConnection();
   }
 
   async drop(): Promise<void> {
-    await this.withAdmin((admin) =>
-      admin.executeMutation(
-        `DROP DATABASE IF EXISTS \`${this.escapeIdent(this.requireDatabaseName())}\``,
-      ),
+    await this.establishConnection();
+    await (
+      await this.connection()
+    ).executeMutation(
+      `DROP DATABASE IF EXISTS \`${this.escapeIdent(this.requireDatabaseName())}\``,
     );
   }
 
@@ -271,32 +274,9 @@ export class MySQLDatabaseTasks {
     return env;
   }
 
-  private async withAdmin<T>(fn: (admin: DatabaseAdapter) => Promise<T>): Promise<T> {
-    const { Mysql2Adapter } = await import("../connection-adapters/mysql2-adapter.js");
-    const socket = this.resolvedField("socket");
-    const adminConfig: {
-      host?: string;
-      port?: number;
-      user?: string;
-      password?: string;
-      socketPath?: string;
-    } = {
-      user: this.resolvedField("username"),
-      password: this.resolvedField("password"),
-    };
-    if (socket) {
-      adminConfig.socketPath = socket;
-    } else {
-      adminConfig.host = this.resolvedField("host") ?? "localhost";
-      adminConfig.port = coercePort(this.resolvedField("port"), 3306);
-    }
-    const adapter = new Mysql2Adapter(adminConfig);
-    try {
-      return await fn(adapter);
-    } finally {
-      const close = (adapter as unknown as { close?: () => Promise<void> }).close;
-      if (typeof close === "function") await close.call(adapter);
-    }
+  private async connection(): Promise<DatabaseAdapter> {
+    const { Base } = await import("../base.js");
+    return Base.connectionPool().leaseConnection();
   }
 
   private async runCmd(cmd: string, args: string[], action: string, stdin?: string): Promise<void> {
@@ -335,36 +315,11 @@ export class MySQLDatabaseTasks {
   }
 
   /** @internal */
-  private connection(): DatabaseAdapter | null {
-    return DatabaseTasks.migrationConnection();
-  }
-
-  /** @internal */
-  private async establishConnection(config?: DatabaseConfig): Promise<void> {
-    const cfg = config ?? this.dbConfig;
-    const { Mysql2Adapter } = await import("../connection-adapters/mysql2-adapter.js");
-    const c = cfg.configuration;
-    let adapter: DatabaseAdapter;
-    if (c.url) {
-      adapter = new Mysql2Adapter(String(c.url));
-    } else {
-      const socket = c.socket as string | undefined;
-      adapter = socket
-        ? new Mysql2Adapter({
-            database: cfg.database,
-            user: c.username as string | undefined,
-            password: c.password as string | undefined,
-            socketPath: socket,
-          })
-        : new Mysql2Adapter({
-            host: (c.host as string) ?? "localhost",
-            port: coercePort(c.port, 3306),
-            database: cfg.database,
-            user: c.username as string | undefined,
-            password: c.password as string | undefined,
-          });
-    }
-    DatabaseTasks.setAdapter(adapter);
+  private async establishConnection(configHash?: Record<string, unknown>): Promise<void> {
+    const { Base } = await import("../base.js");
+    await Base.establishConnection(
+      (configHash ?? this.dbConfig.configuration) as { adapter?: string; [key: string]: unknown },
+    );
   }
 
   /** @internal */

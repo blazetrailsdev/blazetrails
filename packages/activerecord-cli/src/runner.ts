@@ -1,15 +1,6 @@
 import { resolve, join } from "path";
-import { getFsAsync } from "@blazetrails/activesupport";
 import { Base, DatabaseConfigurations, DatabaseTasks } from "@blazetrails/activerecord";
-import { loadDatabaseConfig } from "./db-helpers.js";
-
-async function tryLoadModels(cwd: string): Promise<void> {
-  const fsAdapter = await getFsAsync();
-  const modelsPath = resolve(join(cwd, "app", "models", "index.ts"));
-  if (!fsAdapter.existsSync(modelsPath)) return;
-  const { pathToFileURL } = await import("node:url");
-  await import(pathToFileURL(modelsPath).href);
-}
+import { loadDatabaseConfig, tryLoadModels } from "./db-helpers.js";
 
 export async function arRunner(cwd: string, args: string[]): Promise<number> {
   const envIdx = args.indexOf("--env");

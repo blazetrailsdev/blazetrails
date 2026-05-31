@@ -1,16 +1,5 @@
-import { resolve, join } from "path";
-import { getFsAsync } from "@blazetrails/activesupport";
 import { Base, DatabaseConfigurations, DatabaseTasks } from "@blazetrails/activerecord";
-import { loadDatabaseConfig } from "./db-helpers.js";
-
-async function tryLoadModels(cwd: string): Promise<Record<string, unknown>> {
-  const fsAdapter = await getFsAsync();
-  const modelsPath = resolve(join(cwd, "app", "models", "index.ts"));
-  if (!fsAdapter.existsSync(modelsPath)) return {};
-  const { pathToFileURL } = await import("node:url");
-  const mod = await import(pathToFileURL(modelsPath).href);
-  return mod as Record<string, unknown>;
-}
+import { loadDatabaseConfig, tryLoadModels } from "./db-helpers.js";
 
 export interface StartOptions {
   /** Override of repl.start — injected by tests to avoid opening a real REPL. */
@@ -52,8 +41,9 @@ export async function arConsole(
   type ReplStart = (o: { prompt: string; useGlobal: boolean }) => {
     on(e: string, cb: () => void): void;
   };
-  const replMod = opts.startRepl ? null : await import("repl");
-  const startFn: ReplStart = (opts.startRepl ?? replMod!.start.bind(replMod!)) as ReplStart;
+  const startFn: ReplStart = opts.startRepl
+    ? opts.startRepl
+    : ((await import("repl")).start as unknown as ReplStart);
   const replContext = startFn({ prompt: "trails> ", useGlobal: false });
 
   const ctx = (replContext as unknown as { context: Record<string, unknown> }).context;

@@ -2,17 +2,14 @@ import { DatabaseTasks, DatabaseConfigurations, Migrator } from "@blazetrails/ac
 import type { MigrationProxy } from "@blazetrails/activerecord";
 import { loadDatabaseConfig, loadMigrations } from "./db-helpers.js";
 
-async function resolvePending(): Promise<MigrationProxy[]> {
+async function resolvePending(migrations: MigrationProxy[]): Promise<MigrationProxy[]> {
   const env = DatabaseConfigurations.currentEnv();
   const configs = DatabaseTasks.configsFor(env);
   if (configs.length === 0) return [];
   const config = configs.find((c) => c.name === "primary") ?? configs[0];
   let pending: MigrationProxy[] = [];
   await DatabaseTasks.withTemporaryConnection(config, async (adapter) => {
-    const migrator = new Migrator(
-      adapter,
-      (DatabaseTasks as unknown as { _migrations: MigrationProxy[] })._migrations ?? [],
-    );
+    const migrator = new Migrator(adapter, migrations);
     pending = await migrator.pendingMigrationsReadOnly();
   });
   return pending;
@@ -35,8 +32,8 @@ function pendingMessage(pending: MigrationProxy[]): string {
 export async function checkPendingMigrations(cwd?: string): Promise<MigrationProxy[]> {
   const dir = cwd ?? process.cwd();
   await loadDatabaseConfig(dir);
-  loadMigrations(dir);
-  return resolvePending();
+  const migrations = loadMigrations(dir);
+  return resolvePending(migrations);
 }
 
 export async function dbAbortIfPendingMigrations(cwd: string): Promise<number> {

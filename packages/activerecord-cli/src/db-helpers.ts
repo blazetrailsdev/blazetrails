@@ -21,7 +21,9 @@ export async function loadDatabaseConfig(cwd: string): Promise<DatabaseConfigura
   return configs;
 }
 
-export function loadMigrations(cwd: string): void {
+export function loadMigrations(cwd: string): import("@blazetrails/activerecord").MigrationProxy[] {
   const paths = DatabaseTasks.migrationsPaths.map((p) => resolve(join(cwd, p)));
-  DatabaseTasks.registerMigrations(Migrator.discoverMigrations(paths));
+  const migrations = Migrator.discoverMigrations(paths);
+  DatabaseTasks.registerMigrations(migrations);
+  return migrations;
 }

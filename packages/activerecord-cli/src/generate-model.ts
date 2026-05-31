@@ -1,7 +1,7 @@
-import { mkdir, writeFile, access } from "fs/promises";
+import { mkdir, writeFile } from "fs/promises";
 import { join } from "path";
 import { camelize, underscore, pluralize } from "@blazetrails/activesupport";
-import { renderMigration } from "./generate-migration.js";
+import { renderMigration, exists } from "./generate-migration.js";
 import type { FieldSpec, GenerateMigrationOptions } from "./generate-migration.js";
 
 export type { FieldSpec };
@@ -34,15 +34,6 @@ function renderModel(className: string, fields: FieldSpec[]): string {
     `import { Base } from "@blazetrails/activerecord";\n\n` +
     `export class ${className} extends Base {${body ? `\n${body}\n` : ""}}\n`
   );
-}
-
-async function exists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export async function generateModel(

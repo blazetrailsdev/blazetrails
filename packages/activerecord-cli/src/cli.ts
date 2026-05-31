@@ -16,14 +16,14 @@ Commands:
   generate:migration <Name>      Emit db/migrate/<ts>_<snake_name>.ts
   generate:model <Name>          Emit app/models/<snake>.ts + a create migration
   typecheck                      Type-check your models via trails-tsc
-  schema:dump          Dump the current schema via trails-schema-dump
-  models:dump          Dump model metadata via trails-models-dump
-  db:create            Create the database for the current TRAILS_ENV
-  db:drop              Drop the database for the current TRAILS_ENV
-  db:migrate           Run pending migrations
-  db:rollback          Roll back the last migration
-  db:schema:load       Load db/schema.ts into the database
-  db:seed              Load db/seeds.ts
+  schema:dump                    Dump the current schema via trails-schema-dump
+  models:dump                    Dump model metadata via trails-models-dump
+  db:create                      Create the database for the current TRAILS_ENV
+  db:drop                        Drop the database for the current TRAILS_ENV
+  db:migrate                     Run pending migrations
+  db:rollback                    Roll back the last migration
+  db:schema:load                 Load db/schema.ts into the database
+  db:seed                        Load db/seeds.ts
 
 Coming in later slices: db:migrate:status, db:setup, db:prepare, db:reset.
 

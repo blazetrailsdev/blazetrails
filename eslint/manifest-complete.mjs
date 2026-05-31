@@ -43,13 +43,14 @@ function isModelFile(name) {
  * Resolve a relative import specifier to a bare filename, handling the ESM
  * `.js`-extension convention (source is `.ts` on disk).
  * Returns `undefined` for non-relative imports or nested paths.
+ * Uses string ops (not path.*) because ESM specifiers always use `/`.
  */
 function specifierToFile(specifier) {
-  if (!specifier.startsWith("./") && !specifier.startsWith("../")) return undefined;
-  const base = path.basename(specifier);
+  if (!specifier.startsWith("./")) return undefined;
+  const rest = specifier.slice(2); // strip "./"
   // Nested paths (./sub/x.js) are not model files in a flat models/ dir.
-  if (path.dirname(specifier) !== ".") return undefined;
-  return base.replace(/\.js$/, ".ts");
+  if (rest.includes("/")) return undefined;
+  return rest.replace(/\.js$/, ".ts");
 }
 
 const rule = {
@@ -88,7 +89,7 @@ const rule = {
     }
 
     // Track which model files are covered by an import declaration.
-    const importedFiles = new Map(); // file → ImportDeclaration node (for reporting)
+    const importedFiles = new Set();
     const importedSpecifiers = new Map(); // specifier → node
 
     return {
@@ -98,7 +99,7 @@ const rule = {
         const file = specifierToFile(specifier);
         if (!file) return;
         importedSpecifiers.set(specifier, node);
-        if (file) importedFiles.set(file, node);
+        importedFiles.add(file);
       },
 
       "Program:exit"(program) {

@@ -15,6 +15,7 @@ import {
   dbReset,
   dbPrepare,
 } from "./db-tasks.js";
+import { dbAbortIfPendingMigrations } from "./pending-migrations.js";
 
 const HELP = `ar — the CLI for standalone @blazetrails/activerecord projects
 
@@ -37,6 +38,7 @@ Commands:
   db:setup                       Create, load schema, and seed
   db:reset                       Drop, then db:setup
   db:prepare                     Idempotent setup (create if missing, migrate, seed)
+  db:abort_if_pending_migrations Exit non-zero if there are pending migrations
 
 Coming in later slices: db:migrate:status.
 
@@ -271,6 +273,9 @@ export async function run(argv: string[], cwd: string): Promise<number> {
       return 0;
     }
     return dbPrepare(cwd, rest);
+  }
+  if (command === "db:abort_if_pending_migrations") {
+    return dbAbortIfPendingMigrations(cwd);
   }
   if (command === "generate:migration") {
     if (wantsHelp(rest)) {

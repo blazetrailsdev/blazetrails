@@ -78,7 +78,7 @@ const DB_SEED_HELP = `ar db:seed — load db/seeds.ts (no-op if file is absent)`
 
 const GENERATE_MIGRATION_HELP = `ar generate:migration <Name> [field:type ...] — emit a migration file
 
-Creates db/migrate/<unix_ts>_<snake_name>.ts. The migration class name is the
+Creates db/migrate/<YYYYMMDDHHMMSS>_<snake_name>.ts. The migration class name is the
 CamelCase form of <Name>. Name patterns trigger different templates:
   add_<cols>_to_<table>    → addColumn calls
   remove_<cols>_from_<tbl> → removeColumn calls
@@ -92,7 +92,7 @@ Options:
 const GENERATE_MODEL_HELP = `ar generate:model <Name> [field:type ...] — emit a model + creation migration
 
 Creates app/models/<snake_name>.ts (a Base subclass) and
-db/migrate/<unix_ts>_create_<plural_snake>.ts.
+db/migrate/<YYYYMMDDHHMMSS>_create_<plural_snake>.ts.
 
 Options:
   --force      Overwrite if files already exist (default: refuse).

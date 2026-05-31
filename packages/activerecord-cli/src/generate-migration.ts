@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, writeFile, access } from "fs/promises";
 import { join } from "path";
 import { camelize, underscore, pluralize } from "@blazetrails/activesupport";
 
@@ -43,9 +43,17 @@ export function parseFields(tokens: string[]): FieldSpec[] {
     .filter((f): f is FieldSpec => f !== null);
 }
 
-/** Normalize a user-supplied name: strip namespace separators so `Admin::User` → `admin_user`. */
+/**
+ * Normalize a user-supplied migration/model name: convert to snake_case and
+ * replace path separators (/ and \\ from namespace notation) with underscores.
+ */
 export function normalizeSnakeName(name: string): string {
-  return underscore(name).replace(/\//g, "_");
+  return underscore(name).replace(/[/\\]/g, "_");
+}
+
+/** Strip a trailing `_id` suffix so `author_id:references` generates `author_id`, not `author_id_id`. */
+export function normalizeRefName(name: string): string {
+  return name.endsWith("_id") ? name.slice(0, -3) : name;
 }
 
 /** pluralize(underscore(x)) — mirrors Rails' `tableize`. */
@@ -55,6 +63,15 @@ function tableize(name: string): string {
 
 function isReference(type: string): boolean {
   return type === "references" || type === "belongs_to";
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function renderBody(snakeName: string, fields: FieldSpec[]): string {
@@ -67,7 +84,7 @@ function renderBody(snakeName: string, fields: FieldSpec[]): string {
     const cols = fields
       .map((f) =>
         isReference(f.type)
-          ? `    await this.addReference("${tbl}", "${f.name}", { foreignKey: true });`
+          ? `    await this.addReference("${tbl}", "${normalizeRefName(f.name)}", { foreignKey: true });`
           : `    await this.addColumn("${tbl}", "${f.name}", "${f.type}");`,
       )
       .join("\n");
@@ -81,7 +98,7 @@ function renderBody(snakeName: string, fields: FieldSpec[]): string {
     const cols = fields
       .map((f) =>
         isReference(f.type)
-          ? `    await this.removeReference("${tbl}", "${f.name}");`
+          ? `    await this.removeReference("${tbl}", "${normalizeRefName(f.name)}");`
           : `    await this.removeColumn("${tbl}", "${f.name}", "${f.type}");`,
       )
       .join("\n");
@@ -95,7 +112,7 @@ function renderBody(snakeName: string, fields: FieldSpec[]): string {
     const cols = fields
       .map((f) =>
         isReference(f.type)
-          ? `      t.references(${JSON.stringify(f.name)}, { foreignKey: true });`
+          ? `      t.references(${JSON.stringify(normalizeRefName(f.name))}, { foreignKey: true });`
           : `      t.column(${JSON.stringify(f.name)}, ${JSON.stringify(f.type)});`,
       )
       .join("\n");
@@ -128,13 +145,18 @@ export async function generateMigration(
   const snakeName = normalizeSnakeName(name);
   const migrateDir = join(root, "db", "migrate");
   const path = join(migrateDir, `${ts}_${snakeName}.ts`);
-  // Existence check runs even in dry-run so the output reflects what a real run would do.
-  const content = renderMigration(snakeName, fields);
+  // Check existence upfront so dry-run reflects what a real run would do.
+  if (!options.force && (await fileExists(path))) {
+    return { path, written: false, skipped: true };
+  }
   if (!options.dryRun) {
     await mkdir(migrateDir, { recursive: true });
     try {
-      // Atomic create: flag "wx" fails with EEXIST if the file already exists.
-      await writeFile(path, content, options.force ? "utf8" : { encoding: "utf8", flag: "wx" });
+      // Atomic create: "wx" fails with EEXIST if a concurrent write beat the check above.
+      await writeFile(path, renderMigration(snakeName, fields), {
+        encoding: "utf8",
+        flag: options.force ? "w" : "wx",
+      });
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "EEXIST") {
         return { path, written: false, skipped: true };

@@ -1,7 +1,7 @@
 import { mkdir, writeFile, access } from "fs/promises";
 import { join } from "path";
 import { camelize, pluralize } from "@blazetrails/activesupport";
-import { renderMigration, normalizeSnakeName } from "./generate-migration.js";
+import { renderMigration, normalizeSnakeName, normalizeRefName } from "./generate-migration.js";
 import type { FieldSpec, GenerateMigrationOptions } from "./generate-migration.js";
 
 export type { FieldSpec };
@@ -23,11 +23,6 @@ const TS_TYPES: Record<string, string> = {
   datetime: "Date",
   timestamp: "Date",
 };
-
-/** Normalize a reference field name: strip trailing `_id` so `author_id` → `author`. */
-function normalizeRefName(name: string): string {
-  return name.endsWith("_id") ? name.slice(0, -3) : name;
-}
 
 function renderModel(className: string, fields: FieldSpec[]): string {
   const refs = fields.filter((f) => f.type === "references" || f.type === "belongs_to");

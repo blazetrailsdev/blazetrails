@@ -196,12 +196,10 @@ export type { DumpSchemaColumnsOptions } from "./schema-columns-dump.js";
 export {
   introspectTables,
   introspectColumns,
-  introspectIndexes,
   introspectPrimaryKey,
   introspectForeignKeys,
 } from "./schema-introspection.js";
-export type { IntrospectedIndex } from "./schema-introspection.js";
-export { generateModels, unqualify } from "./model-codegen.js";
+export { generateModels } from "./model-codegen.js";
 export type { IntrospectedTable, GenerateModelsOptions } from "./model-codegen.js";
 export {
   ActiveRecordError,

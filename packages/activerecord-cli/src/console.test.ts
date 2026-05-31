@@ -17,13 +17,10 @@ function makeReplStub() {
   return server;
 }
 
+const DB_CONFIG = `export default { development: { adapter: "sqlite3", database: ":memory:" } };\n`;
 async function scaffoldProject(dir: string) {
   await mkdir(join(dir, "config"), { recursive: true });
-  await writeFile(
-    join(dir, "config", "database.ts"),
-    `export default { development: { adapter: "sqlite3", database: ":memory:" } };\n`,
-    "utf8",
-  );
+  await writeFile(join(dir, "config", "database.ts"), DB_CONFIG, "utf8");
 }
 
 describe("ArConsoleTest", () => {

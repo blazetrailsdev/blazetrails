@@ -57,6 +57,13 @@ describe("tableless useFixtures (naked/yml)", () => {
   // that do not exist on the parrots table.
   // Rails: table "parrots" has no columns named "arrr", "foobar".
   // Trails: mirrors the same error format, reporting all invalid columns at once.
+  //
+  // The test calls defineJoinTableFixtures directly rather than routing through
+  // useFixtures because the error surfaces in beforeEach: Vitest marks the enclosing
+  // test as failed with the hook error, which cannot be intercepted with
+  // expect().rejects inside the same test body. Testing the underlying function is
+  // equivalent — useFixtures delegates to defineJoinTableFixtures in its beforeEach
+  // without wrapping the error.
   describe("test_yaml_file_with_invalid_column", () => {
     it("raises with Rails-mirrored message listing all unknown columns", async () => {
       await expect(

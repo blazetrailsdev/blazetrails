@@ -231,9 +231,13 @@ function isTableMissingError(e: unknown): boolean {
  * const { customers } = useFixtures(["customers"], () => Base.connection, { schema: TEST_SCHEMA });
  * ```
  */
-/** Result of the tableless overload: one `JoinTableAccessor` per entry, keyed by `table`. */
+/**
+ * Result of the tableless overload: one `JoinTableAccessor` per entry, keyed by `table`.
+ * The label union is derived from `entry.data`'s own keys so `accessor("root")` is
+ * compile-time checked when the data literal is inlined (same pattern as the by-name overload).
+ */
 export type UseTablelessFixturesResult<T extends readonly TablelessFixtureEntry[]> = {
-  [K in T[number]["table"]]: JoinTableAccessor<string>;
+  [E in T[number] as E["table"]]: JoinTableAccessor<Extract<keyof E["data"], string>>;
 };
 
 /**
@@ -322,6 +326,11 @@ export function useFixtures(
   opts?: UseFixturesOpts,
 ): Record<string, unknown> {
   // Tableless array: every element is an object with { table, data }.
+  // The `length > 0` guard is intentional: an empty array is vacuously correct for
+  // both the by-name and tableless overloads (both seed zero fixtures and return `{}`),
+  // so falling through to the by-name path is safe. Callers passing a non-empty
+  // tableless array computed dynamically must ensure at least one element is present;
+  // the TypeScript overload resolution enforces the correct return type at the call site.
   if (
     Array.isArray(fixturesOrNames) &&
     fixturesOrNames.length > 0 &&

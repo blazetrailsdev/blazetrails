@@ -162,7 +162,8 @@ Rails: `test/cases/tasks/database_tasks_test.rb:122`.
 
 Rails `create_current` calls `ActiveRecord::Base.establish_connection(env)` after
 creating so the caller's pool is re-pointed to the env's primary. Added post-create
-`Base.establishConnection(envName)` call to `createCurrent`. 2 tests unskipped.
+`Base.establishConnection(primaryConfig.configuration)` call to `createCurrent`, where
+`primaryConfig` is resolved via `configsFor(env).find(isPrimary)`. 2 tests unskipped.
 
 Rails: `test/cases/tasks/database_tasks_test.rb:586, 703`.
 

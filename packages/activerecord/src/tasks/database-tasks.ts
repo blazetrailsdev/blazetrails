@@ -215,7 +215,9 @@ export class DatabaseTasks {
     // Trails' establishConnection (which expects a URL or config object, not an env name)
     // gets the correct adapter/database values.
     const envName = this._normalizeEnv(environment);
-    const primaryConfig = this.configsFor(envName).find((c) => c.name === "primary");
+    const primaryConfig = this.configsFor(envName).find(
+      (c) => this.databaseConfiguration?.isPrimary(c.name) ?? c.name === "primary",
+    );
     if (primaryConfig) {
       const { Base } = await import("../base.js");
       await Base.establishConnection(primaryConfig.configuration as Record<string, unknown>);

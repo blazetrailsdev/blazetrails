@@ -1,5 +1,4 @@
 import { describe, it, expect, expectTypeOf, vi, beforeAll, afterAll } from "vitest";
-import { snapshotEncryptionConfig, restoreEncryptionConfig } from "../encryption/test-helpers.js";
 import { useFixtures, resolveFixtureNames, deriveFixtureSchema } from "./use-fixtures.js";
 import { fixtureRegistry, isJoinTableEntry } from "./fixtures-registry.js";
 import { FixtureSet } from "./fixture-set.js";
@@ -63,6 +62,22 @@ function makeModel(tableName: string, rows: Map<unknown, Record<string, unknown>
     primaryKey: pk,
     findBy: vi.fn(async (attrs: Record<string, unknown>) => rows.get(attrs[pk]) ?? null),
   } as any;
+}
+
+// Configures encryption with the shared test keys + cleartext fallback so encrypted
+// fixtures seed and read back, returning a restore fn for `afterAll`. The encrypted
+// attribute type needs keys (and supportUnencryptedData, for the cleartext rows) to
+// reload. Dynamically imports the encryption test-helpers so this file doesn't
+// register `Base.encrypts` hooks at module-collection time — the per-entry `addOn`
+// is what loads encryption lazily at run time, and keeping it out of module scope
+// preserves the opt-in property. Mirrors how Rails' encryption test cases set keys
+// via ActiveRecord::EncryptionTestCase, scoped to the suite that needs them.
+async function setupScopedEncryption(): Promise<() => void> {
+  const { configureEncryption, snapshotEncryptionConfig, restoreEncryptionConfig } =
+    await import("../encryption/test-helpers.js");
+  const snapshot = snapshotEncryptionConfig();
+  configureEncryption({ supportUnencryptedData: true });
+  return () => restoreEncryptionConfig(snapshot);
 }
 
 // --- useFixtures ---
@@ -649,8 +664,17 @@ describe("resolveFixtureNames same-table guard", () => {
 describe("fixtureRegistry seeds against TEST_SCHEMA", () => {
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
+  // Encrypted entries (encryptedBooks…) reload through the encrypted attribute
+  // type, which needs keys + the cleartext fallback. Configure (scoped) so the
+  // seed loop can reload them, and restore after so this describe doesn't leak
+  // encryption config to later suites.
+  let restoreEncryption: () => void;
   beforeAll(async () => {
+    restoreEncryption = await setupScopedEncryption();
     await defineSchema(TEST_SCHEMA);
+  });
+  afterAll(() => {
+    restoreEncryption();
   });
 
   it("every registered entry seeds without error", async () => {
@@ -679,19 +703,16 @@ describe("useFixtures bootstraps the encryption add-on for encrypted fixtures", 
   setupHandlerSuite();
   useHandlerTransactionalFixtures();
 
-  // The addOn calls `configureEncryption` (keys + supportUnencryptedData), which
-  // mutates the process-global encryption config. Snapshot before and restore
-  // after so this suite doesn't leak that state into later suites in the worker.
-  // (Configuring encryption is intrinsic to reading encrypted fixtures — you
-  // can't decrypt/round-trip them without keys — mirroring how Rails' encryption
-  // test cases configure keys via ActiveRecord::EncryptionTestCase.)
-  let configSnapshot: ReturnType<typeof snapshotEncryptionConfig>;
+  // Reading encrypted fixtures back needs keys + the cleartext fallback. Configure
+  // that here (scoped, with snapshot/restore) rather than in the addOn, so the
+  // global encryption config doesn't leak into later suites in the worker.
+  let restoreEncryption: () => void;
   beforeAll(async () => {
-    configSnapshot = snapshotEncryptionConfig();
+    restoreEncryption = await setupScopedEncryption();
     await defineSchema(TEST_SCHEMA);
   });
   afterAll(() => {
-    restoreEncryptionConfig(configSnapshot);
+    restoreEncryption();
   });
 
   // EncryptedBook calls `encrypts("name", { deterministic: true })` in a static

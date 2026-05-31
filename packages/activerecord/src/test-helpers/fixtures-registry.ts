@@ -31,9 +31,16 @@ export interface FixtureModelEntry {
 
 /**
  * Bootstraps the encryption add-on so the `EncryptedBook*` models import cleanly.
- * Importing `encryption/test-helpers.js` triggers the `../encryption.js` side
- * effect that registers `Base.encrypts`' hooks, then configures the shared test
- * key material with `supportUnencryptedData` enabled.
+ * Importing the `../encryption.js` wiring registers `Base.encrypts`' hooks via its
+ * module-load side effect — all the `static { encrypts(...) }` blocks in
+ * `book-encrypted.ts` need to evaluate without throwing.
+ *
+ * Deliberately does NOT touch the process-global encryption config (keys /
+ * `supportUnencryptedData`): that is per-suite state a fixture loader must not
+ * leak into unrelated tests. Reading the seeded rows back as plaintext needs keys
+ * plus the cleartext fallback; the suites that load encrypted fixtures configure
+ * that themselves with snapshot/restore (mirroring how Rails' encryption test
+ * cases set up keys via `ActiveRecord::EncryptionTestCase`).
  *
  * Fidelity note: Rails' encryption test cases prepend
  * `ActiveRecord::Encryption::EncryptedFixtures` onto `ActiveRecord::Fixture`,
@@ -48,10 +55,7 @@ export interface FixtureModelEntry {
  *
  * @internal
  */
-const bootstrapEncryptionAddOn = (): Promise<void> =>
-  import("../encryption/test-helpers.js").then(({ configureEncryption }) => {
-    configureEncryption({ supportUnencryptedData: true });
-  });
+const bootstrapEncryptionAddOn = (): Promise<void> => import("../encryption.js").then(() => {});
 
 /**
  * A HABTM join-table fixture-set entry. These tables (e.g. `categories_posts`)

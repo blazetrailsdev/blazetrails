@@ -286,10 +286,10 @@ export class DatabaseTasks {
     }
 
     // Pool path: check whether the Base pool is connected to this config's database.
-    // When the pool targets a different file-backed DB (multi-db scenario), route
-    // through withTemporaryConnection so the owned adapter is properly closed.
-    // _isMemoryDatabase covers `:memory:`, `file::memory:`, and `mode=memory` URIs —
-    // in-memory pools always match any config and must not be bypassed.
+    // When pool and config point to different known databases (multi-db scenario),
+    // route through withTemporaryConnection so the owned adapter is properly closed.
+    // "database unknown on either side" means a URL-only config or no database
+    // restriction — treat as matching so the established pool is reused.
     const { Base } = await import("../base.js");
     let poolDb: string | undefined;
     let poolPresent = false;
@@ -301,17 +301,14 @@ export class DatabaseTasks {
       if (!(error instanceof ConnectionNotDefined)) throw error;
       // No pool — fall through to withTemporaryConnection via _connectFor.
     }
-    // Use the pool when: pool is present AND (pool db is in-memory, config db is
-    // unknown, pool db is unknown — URL-only config, or databases match exactly).
-    // "pool present but database unknown" means a URL-only config whose pool owns
-    // the connection; bypass would open a second unrelated in-memory database.
-    if (
-      poolPresent &&
-      (!poolDb || _isMemoryDatabase(poolDb) || !config.database || config.database === poolDb)
-    ) {
+    // Use the pool when: pool is present AND databases are equal, or either side
+    // is unknown (URL-only config / pool established without an explicit database).
+    if (poolPresent && (!poolDb || !config.database || config.database === poolDb)) {
       const adapter = await this._migrationAdapter();
       if (!adapter)
-        throw new Error("No database adapter configured. Call DatabaseTasks.setAdapter() first.");
+        throw new Error(
+          "No database adapter configured. Call Base.establishConnection() or DatabaseTasks.setAdapter() first.",
+        );
       await runMigration(adapter);
     } else {
       // Multi-db or no pool: withTemporaryConnection scopes the adapter lifecycle.

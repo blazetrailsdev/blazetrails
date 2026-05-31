@@ -9,7 +9,6 @@ import { DatabaseConfigurations } from "../database-configurations.js";
 import { ProtectedEnvironmentError } from "../migration.js";
 import type { ConnectionPool } from "../connection-adapters/abstract/connection-pool.js";
 import { getFs, getPath, getCryptoAsync, getOs, getEnv } from "@blazetrails/activesupport";
-import { coercePort } from "./task-utils.js";
 
 /**
  * Raised when a database task is invoked against an adapter that
@@ -22,18 +21,6 @@ export class DatabaseNotSupported extends Error {
   constructor(message: string) {
     super(message);
     this.name = "DatabaseNotSupported";
-  }
-}
-
-function sqliteDatabaseFromUrl(url: string): string | undefined {
-  try {
-    const parsed = new URL(url);
-    const pathname = decodeURIComponent(parsed.pathname);
-    const host = parsed.host;
-    const resolved = host ? `${host}${pathname}` : pathname;
-    return resolved || undefined;
-  } catch {
-    return undefined;
   }
 }
 
@@ -268,12 +255,6 @@ export class DatabaseTasks {
       adapter.schemaCache?.clear();
     };
 
-    // Shim path (legacy): use the explicitly set adapter directly.
-    if (this._adapterInstance) {
-      await runMigration(this._adapterInstance);
-      return;
-    }
-
     // Pool path: check whether the Base pool is connected to this config's database.
     // When pool and config point to different known databases (multi-db scenario),
     // route through withTemporaryConnection so the owned adapter is properly closed.
@@ -286,7 +267,7 @@ export class DatabaseTasks {
     } catch (error) {
       const { ConnectionNotDefined } = await import("../errors.js");
       if (!(error instanceof ConnectionNotDefined)) throw error;
-      // No pool — fall through to withTemporaryConnection via _connectFor.
+      // No pool — fall through to withTemporaryConnection.
     }
     // Use the pool when: pool is present AND databases are equal, or either side
     // is unknown (URL-only config / pool established without an explicit database).
@@ -308,65 +289,15 @@ export class DatabaseTasks {
     if (configs.length === 0) return;
     const config = configs.find((c) => c.name === "primary") ?? configs[0];
     const { Migrator } = await import("../migration.js");
-    const adapter = await this._resolveAdapter(config);
-    if (!adapter)
-      throw new Error("No database adapter configured. Call DatabaseTasks.setAdapter() first.");
+    const adapter = await this._migrationAdapter();
     const migrator = new Migrator(adapter, this._migrations);
     await migrator.rollback(steps);
     adapter.schemaCache?.clear();
   }
 
-  private static _adapterInstance: import("../adapter.js").DatabaseAdapter | null = null;
-
-  static setAdapter(adapter: import("../adapter.js").DatabaseAdapter | null): void {
-    this._adapterInstance = adapter;
-  }
-
-  private static async _resolveAdapter(
-    _config: DatabaseConfig,
-  ): Promise<import("../adapter.js").DatabaseAdapter | null> {
-    return this._migrationAdapter();
-  }
-
-  /**
-   * Resolve the connection that migration/schema tasks run against.
-   *
-   * Rails derives this purely from `migration_class.lease_connection` (the
-   * connection pool). trails is mid-migration off the legacy
-   * `setAdapter`/`_adapterInstance` bypass — see
-   * `docs/activerecord/database-tasks-rails-equivalence-plan.md`. The explicit
-   * shim still wins when set so existing callers keep working; when no shim is
-   * registered we resolve through `Base`'s pool exactly like Rails. Once every
-   * caller stops calling `setAdapter`, the shim branch is dead code and the
-   * whole bypass (`_adapterInstance`/`setAdapter`/`_resolveAdapter`) is deleted
-   * in the final step of that plan.
-   *
-   * @internal
-   */
-  private static async _migrationAdapter(): Promise<
-    import("../adapter.js").DatabaseAdapter | null
-  > {
-    if (this._adapterInstance) return this._adapterInstance;
+  private static async _migrationAdapter(): Promise<import("../adapter.js").DatabaseAdapter> {
     const { Base } = await import("../base.js");
-    // Rails: `migration_connection == migration_class.lease_connection`, which
-    // leases (checking out on demand) from the established pool. Don't gate on
-    // `isConnectedQ()` — that's only true *after* a connection has been
-    // checked out, so a freshly `establishConnection`'d pool would wrongly
-    // yield null and the no-shim path would never lease. Resolve the pool
-    // instead: when none is registered, `connectionPool()` raises
-    // `ConnectionNotDefined`, which we map to null for the transitional shim
-    // era (caller then reports "No adapter configured"). A *present* pool's
-    // `leaseConnection` errors (discarded / exhausted) propagate rather than
-    // being masked as "no adapter".
-    let pool;
-    try {
-      pool = Base.connectionPool();
-    } catch (error) {
-      const { ConnectionNotDefined } = await import("../errors.js");
-      if (error instanceof ConnectionNotDefined) return null;
-      throw error;
-    }
-    return pool.leaseConnection();
+    return Base.connectionPool().leaseConnection();
   }
 
   static async purge(config: DatabaseConfig): Promise<void> {
@@ -531,15 +462,7 @@ export class DatabaseTasks {
 
     for (const config of configs) {
       try {
-        const adapter = await this._connectFor(config);
-        try {
-          // Honor the config's use_metadata_table opt-out. When set to
-          // false, Rails treats the DB as unstamped and
-          // last_stored_environment returns nil — don't probe the
-          // ar_internal_metadata table even if it's there from a prior
-          // run with the flag enabled. Read via the DatabaseConfig
-          // getter so defaulting/coercion stays consistent across
-          // HashConfig / UrlConfig.
+        await this.withTemporaryConnection(config, async (adapter) => {
           const migrator = new Migrator(adapter, [], {
             internalMetadataEnabled: config.useMetadataTable,
           });
@@ -550,10 +473,7 @@ export class DatabaseTasks {
           if (stored && stored !== envName) {
             throw new EnvironmentMismatchError(envName, stored);
           }
-        } finally {
-          const close = (adapter as { close?: () => Promise<void> }).close;
-          if (typeof close === "function") await close.call(adapter);
-        }
+        });
       } catch (error) {
         if (error instanceof NoDatabaseError) continue;
         throw error;
@@ -789,9 +709,6 @@ export class DatabaseTasks {
     }
     const { SchemaDumper } = await import("../schema-dumper.js");
     const adapter = await this._migrationAdapter();
-    if (!adapter) {
-      throw new Error("No adapter available for schema dump. Call DatabaseTasks.setAdapter first.");
-    }
     const fs = getFs();
     const path = getPath();
     const dir = path.dirname(filename);
@@ -839,9 +756,6 @@ export class DatabaseTasks {
       throw new Error(`Schema file must export a default function (got ${typeof defineSchema})`);
     }
     const adapter = await this._migrationAdapter();
-    if (!adapter) {
-      throw new Error("No adapter configured. Call DatabaseTasks.setAdapter first.");
-    }
     const { MigrationContext } = await import("../migration.js");
     const ctx = new MigrationContext(adapter);
     await defineSchema(ctx);
@@ -859,22 +773,14 @@ export class DatabaseTasks {
    * `internal_metadata.create_table_and_set_flags(env, schema_sha1(file))`.
    */
   private static async _stampSchemaSha1(config: DatabaseConfig, filename: string): Promise<void> {
-    const adapter = await this._migrationAdapter();
-    if (!adapter) return;
-    // Respect useMetadataTable opt-out — if the config says don't use
-    // the metadata table, don't create one just to stamp the SHA1.
     if (!config.useMetadataTable) return;
     try {
+      const adapter = await this._migrationAdapter();
       const { InternalMetadata } = await import("../internal-metadata.js");
       const metadata = new InternalMetadata(adapter);
       const sha1 = await this._schemaSha1(filename);
       await metadata.createTableAndSetFlags(config.envName, sha1);
     } catch (error) {
-      // Best effort — a failed stamp just means schemaUpToDate
-      // returns false next time, triggering a full reload instead
-      // of a truncate. No worse than before Phase 15. Log at debug
-      // level so failures are diagnosable without crashing the load.
-
       console.debug?.(
         `[trails] _stampSchemaSha1 failed for ${config.envName} (${filename})`,
         error,
@@ -909,9 +815,6 @@ export class DatabaseTasks {
     Array<{ status: "up" | "down"; version: string; name: string }>
   > {
     const adapter = await this._migrationAdapter();
-    if (!adapter) {
-      throw new Error("No adapter configured. Call DatabaseTasks.setAdapter first.");
-    }
     const { Migrator } = await import("../migration.js");
     const migrator = new Migrator(adapter, this._migrations);
     return migrator.migrationsStatus();
@@ -996,17 +899,12 @@ export class DatabaseTasks {
       const { ConnectionNotDefined } = await import("../errors.js");
       if (!(error instanceof ConnectionNotDefined)) throw error;
     }
-    // Preserve the shim adapter so callers that use migrationConnection() inside
-    // the fn (e.g. trailties commands pre-step-6) still get a valid connection.
-    const prevAdapter = this._adapterInstance;
     // Mirrors Rails' `ensure` which restores even if establish_connection raises.
     try {
       await Base.establishConnection(config.configuration as Record<string, unknown>);
       const pool = Base.connectionPool();
-      this._adapterInstance = pool.leaseConnection();
       return await fn(pool);
     } finally {
-      this._adapterInstance = prevAdapter;
       if (priorConfig !== null) {
         await Base.establishConnection(priorConfig.configuration as Record<string, unknown>);
       } else {
@@ -1043,7 +941,7 @@ export class DatabaseTasks {
   }
 
   static migrationConnection(): import("../adapter.js").DatabaseAdapter | null {
-    return this._adapterInstance;
+    return null;
   }
 
   static async migrationConnectionPool(): Promise<ConnectionPool | null> {
@@ -1062,8 +960,12 @@ export class DatabaseTasks {
     const fs = getFs();
     if (!fs.existsSync(filename)) return true;
 
-    const adapter = await this._migrationAdapter();
-    if (!adapter) return false;
+    let adapter: import("../adapter.js").DatabaseAdapter;
+    try {
+      adapter = await this._migrationAdapter();
+    } catch {
+      return false;
+    }
 
     const { InternalMetadata } = await import("../internal-metadata.js");
     const metadata = new InternalMetadata(adapter);
@@ -1097,8 +999,12 @@ export class DatabaseTasks {
    * hardcoded verbatim, matching Rails' `insert_versions_sql`.
    */
   private static async _appendSchemaInformation(filename: string): Promise<void> {
-    const adapter = await this._migrationAdapter();
-    if (!adapter) return;
+    let adapter: import("../adapter.js").DatabaseAdapter;
+    try {
+      adapter = await this._migrationAdapter();
+    } catch {
+      return;
+    }
 
     const { SchemaMigration } = await import("../schema-migration.js");
     const migration = new SchemaMigration(adapter);
@@ -1188,52 +1094,6 @@ export class DatabaseTasks {
       await this.create(config);
       await this.loadSchema(config, format, file);
     }
-  }
-
-  private static async _connectFor(
-    config: DatabaseConfig,
-  ): Promise<import("../adapter.js").DatabaseAdapter> {
-    const adapter = config.adapter;
-    if (!adapter) throw new Error("config missing adapter");
-    if (/sqlite/.test(adapter)) {
-      const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
-      const c = config.configuration;
-      const fromUrl = typeof c.url === "string" ? sqliteDatabaseFromUrl(String(c.url)) : undefined;
-      const database = config.database ?? fromUrl ?? ":memory:";
-      const path = getPath();
-      // Missing isAbsolute means the PathAdapter (e.g. a VFS) doesn't
-      // model relative/absolute — treat as already absolute.
-      const resolved =
-        database === ":memory:" || !path.isAbsolute || path.isAbsolute(database)
-          ? database
-          : path.resolve(this.root, database);
-      return new SQLite3Adapter(resolved);
-    }
-    if (/postgres/.test(adapter)) {
-      const { PostgreSQLAdapter } = await import("../connection-adapters/postgresql-adapter.js");
-      const c = config.configuration;
-      if (c.url) return new PostgreSQLAdapter(String(c.url));
-      return new PostgreSQLAdapter({
-        host: (c.host as string) ?? "localhost",
-        port: coercePort(c.port, 5432),
-        database: config.database,
-        user: c.username as string | undefined,
-        password: c.password as string | undefined,
-      });
-    }
-    if (/mysql/.test(adapter)) {
-      const { Mysql2Adapter } = await import("../connection-adapters/mysql2-adapter.js");
-      const c = config.configuration;
-      if (c.url) return new Mysql2Adapter(String(c.url));
-      return new Mysql2Adapter({
-        host: (c.host as string) ?? "localhost",
-        port: coercePort(c.port, 3306),
-        database: config.database,
-        user: c.username as string | undefined,
-        password: c.password as string | undefined,
-      });
-    }
-    throw new Error(`Unsupported adapter: ${adapter}`);
   }
 }
 

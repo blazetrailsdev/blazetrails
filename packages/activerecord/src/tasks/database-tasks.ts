@@ -280,7 +280,7 @@ export class DatabaseTasks {
     // "database unknown on either side" means a URL-only config or no database
     // restriction — treat as matching so the established pool is reused.
     const { Base } = await import("../base.js");
-    let pool;
+    let pool: ConnectionPool | undefined;
     try {
       pool = Base.connectionPool();
     } catch (error) {

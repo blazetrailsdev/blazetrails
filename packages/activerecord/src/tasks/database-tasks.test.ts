@@ -601,8 +601,9 @@ describe("DatabaseTasksMigrateTest", () => {
     // Empty migration set: migrateAll still creates schema_migrations in
     // each database it connects to, proving per-config routing worked.
     DatabaseTasks.registerMigrations([]);
-    // Re-establish the pool against the primary DB so migrate() leases from it
-    // for the primary config; animals routes via withTemporaryConnection → _connectFor.
+    // Establish a Base pool as representative app-state (primary DB already connected).
+    // migrateAll has 2 configs, so it uses withTemporaryConnection for both — each
+    // config gets its own direct connection via _connectFor regardless of this pool.
     Base.removeConnection();
     await Base.establishConnection({ adapter: "sqlite3", database: primaryDb, pool: 1 });
     try {

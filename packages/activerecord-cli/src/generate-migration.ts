@@ -117,7 +117,7 @@ function renderBody(snakeName: string, fields: FieldSpec[]): string {
       )
       .join("\n");
     const inner = cols ? `\n${cols}\n      t.timestamps();\n    ` : "\n      t.timestamps();\n    ";
-    return `    await this.createTable("${tbl}", (t) => {${inner}});`;
+    return `    await this.createTable(${JSON.stringify(tbl)}, (t) => {${inner}});`;
   }
 
   return "    // TODO: implement migration";

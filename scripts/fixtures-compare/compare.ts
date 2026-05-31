@@ -718,7 +718,7 @@ function formatLine(r: FileResult): string {
 }
 
 /** Recursively collects `.yml` paths under `dir`, returning paths relative to `dir` (sorted). */
-function collectYamlPaths(dir: string, prefix: string = ""): string[] {
+export function collectYamlPaths(dir: string, prefix: string = ""): string[] {
   const result: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;

@@ -195,11 +195,16 @@ function isTableMissingError(e: unknown): boolean {
  * authors("david"); // → Author instance
  * ```
  *
- * Subdirectory fixture sets use slash-keyed names; access via bracket notation:
+ * Subdirectory fixture sets use slash-keyed names; access via bracket notation.
+ * Once the set is registered in `fixtures-registry.ts` (Phase 2+), the names
+ * overload works too. Until then, use the object-map overload:
  *
  * ```ts
- * const fixtures = useFixtures(["admin/accounts"], () => adapter);
- * fixtures["admin/accounts"]("david"); // → Admin::Account instance
+ * const fixtures = useFixtures(
+ *   { "admin/accounts": [AdminAccount, adminAccountFixtureData] },
+ *   () => adapter,
+ * );
+ * fixtures["admin/accounts"]("signals37"); // → Admin::Account instance
  * ```
  *
  * Pass `{ schema }` to skip the manual `defineSchema` step: `useFixtures` derives the

@@ -10,6 +10,7 @@ import { currentTimeFromProperTimezone } from "../timestamp.js";
 import { singularize } from "@blazetrails/activesupport";
 import { EncryptedAttributeType } from "../encryption/encrypted-attribute-type.js";
 import { EncryptableRecord } from "../encryption/encryptable-record.js";
+import { Configurable } from "../encryption/configurable.js";
 
 const FIXTURE_MAX_ID = 2 ** 30 - 1;
 
@@ -610,11 +611,11 @@ export async function defineFixtures<T extends BaseClass, K extends string>(
     }
   }
 
-  // Mirrors Rails' EncryptedFixtures#encrypt_fixture_data + process_preserved_original_columns:
-  // for models with encrypted attributes, serialize each encrypted column value to ciphertext
-  // before insert so the DB stores encrypted data (not cleartext). Also encrypts any
-  // original_* columns added by the ignore_case option (process_preserved_original_columns).
-  if (EncryptableRecord.hasEncryptedAttributes(ModelClass)) {
+  // Mirrors Rails' EncryptedFixtures (gated on Encryption.config.encryptFixtures):
+  // serialize each encrypted column value to ciphertext before insert so the DB stores
+  // encrypted data (not cleartext), and populate original_* preserve-columns for ignoreCase.
+  // Mirrors: ActiveRecord::Railtie `Fixture.prepend EncryptedFixtures if config.encrypt_fixtures`
+  if (Configurable.config.encryptFixtures && EncryptableRecord.hasEncryptedAttributes(ModelClass)) {
     encryptFixtureRows(ModelClass, rows);
   }
 

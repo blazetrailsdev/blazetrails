@@ -26,6 +26,8 @@ export interface DestroyModelResult {
   modified?: string;
   /** Set when multiple create migrations match and the target is ambiguous. */
   ambiguous?: string[];
+  /** False when the model file was absent (migration-only cleanup). */
+  modelDeleted: boolean;
 }
 
 async function readIfPresent(path: string): Promise<string | undefined> {
@@ -121,37 +123,42 @@ export async function destroyModel(
       modelPath,
       migrationPath: undefined,
       deleted: false,
+      modelDeleted: false,
       ambiguous: migrationMatches,
     };
   }
   const migrationPath = migrationMatches.length === 1 ? migrationMatches[0] : undefined;
 
   const actualModel = await readIfPresent(modelPath);
-  if (actualModel === undefined && migrationPath === undefined) {
-    return { modelPath, migrationPath, deleted: false };
+  const modelPresent = actualModel !== undefined;
+  if (!modelPresent && migrationPath === undefined) {
+    return { modelPath, migrationPath, deleted: false, modelDeleted: false };
   }
 
   if (!options.force) {
     if (actualModel !== undefined) {
       const diff = checkModified(actualModel, renderModel(className, fields));
-      if (diff !== undefined) return { modelPath, migrationPath, deleted: false, modified: diff };
+      if (diff !== undefined)
+        return { modelPath, migrationPath, deleted: false, modelDeleted: false, modified: diff };
     }
     if (migrationPath !== undefined) {
       const actualMigration = await readIfPresent(migrationPath);
       if (actualMigration !== undefined) {
         const diff = checkModified(actualMigration, renderMigration(migrationSuffix, fields));
-        if (diff !== undefined) return { modelPath, migrationPath, deleted: false, modified: diff };
+        if (diff !== undefined)
+          return { modelPath, migrationPath, deleted: false, modelDeleted: false, modified: diff };
       }
     }
   }
 
   if (!options.dryRun) {
-    await safeUnlink(modelPath);
+    if (modelPresent) await safeUnlink(modelPath);
     if (migrationPath !== undefined) await safeUnlink(migrationPath);
-    await generateManifest(join(root, "app", "models")).catch((err) => {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-    });
+    // Only regenerate manifest when the model file existed — it can only appear
+    // in the manifest if it was present. Skipping also avoids the ENOENT thrown
+    // by generateManifest when app/models doesn't exist (migration-only cleanup).
+    if (modelPresent) await generateManifest(join(root, "app", "models"));
   }
 
-  return { modelPath, migrationPath, deleted: true };
+  return { modelPath, migrationPath, deleted: true, modelDeleted: modelPresent };
 }

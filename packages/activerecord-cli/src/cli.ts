@@ -422,7 +422,7 @@ export async function run(argv: string[], cwd: string): Promise<number> {
       return 1;
     }
     const verb = dryRun ? "  (dry)   " : "  remove  ";
-    console.log(`${verb}${result.modelPath}`);
+    if (result.modelDeleted) console.log(`${verb}${result.modelPath}`);
     if (result.migrationPath) console.log(`${verb}${result.migrationPath}`);
     return 0;
   }

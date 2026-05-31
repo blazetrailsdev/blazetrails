@@ -592,6 +592,13 @@ export function canonicalizeRailsRow(railsRow: Row, tsRow: Row, columns: Set<str
 // prettier-ignore
 export async function compareFile(yamlPath: string, yamlByTable: Map<string, FixtureMap>, idIndex: Map<string, Map<number, string[]>>, prelimFailure: Status | undefined, schema: Schema = TEST_SCHEMA): Promise<FileResult> {
   const snake = yamlPath.replace(/\.yml$/, "");
+  // For schema/FK lookups the key must be the DB table name, not the fixture set
+  // path. Top-level files: identical ("accounts"). Namespaced subdir files:
+  // "admin/accounts" → "admin_accounts" (Rails table_name for Admin::Account).
+  // Non-namespaced subdir files (e.g. "reserved_words/distinct" → "distinct")
+  // won't match this joined form, so they fall through to schema:not-ported —
+  // the same no-op behavior as an unrecognised table, not a false positive.
+  const tableSnake = snake.replace(/\//g, "_");
   const tsFile = path.join(TS_DIR, `${kebab(snake)}.ts`);
   const tsBase = existsSync(tsFile) ? `${kebab(snake)}.ts` : null;
   const r: FileResult = { yamlPath, tsBase, status: "MATCH", rowsMatched: 0, rowsTotal: 0, attrsMatched: 0, attrsTotal: 0, attrsSkipped: 0, schemaPorted: false, schemaExtras: 0, notes: [] }; // prettier-ignore
@@ -625,11 +632,11 @@ export async function compareFile(yamlPath: string, yamlByTable: Map<string, Fix
     r.notes.push(keys.length > 1 ? `${tsBase} exports ${keys.length} *FixtureData symbols (expected 1)` : `no *FixtureData export in ${tsBase}`); // prettier-ignore
     return r;
   }
-  const sc = schemaCheck(snake, tsRows, schema, r.notes);
+  const sc = schemaCheck(tableSnake, tsRows, schema, r.notes);
   r.schemaPorted = sc.ported;
   r.schemaExtras = sc.extras;
   let anyDiff = sc.extras > 0;
-  const tableShapeForCols = schema[snake] ? tableShape(schema[snake]) : null;
+  const tableShapeForCols = schema[tableSnake] ? tableShape(schema[tableSnake]) : null;
   const cols: Set<string> | null = tableShapeForCols
     ? new Set([
         ...Object.keys(tableShapeForCols.columns),
@@ -643,7 +650,7 @@ export async function compareFile(yamlPath: string, yamlByTable: Map<string, Fix
       anyDiff = true;
       continue;
     }
-    const railsRow = canonicalizeRailsRow(railsRowRaw, tsRow, cols, snake);
+    const railsRow = canonicalizeRailsRow(railsRowRaw, tsRow, cols, tableSnake);
     r.rowsMatched++;
     if ("id" in railsRow && (!("id" in tsRow) || tsRow.id !== railsRow.id)) {
       r.notes.push(`id-divergence: ${rowName} ts=${String(tsRow.id)} rails=${String(railsRow.id)}`);
@@ -666,7 +673,7 @@ export async function compareFile(yamlPath: string, yamlByTable: Map<string, Fix
       if (railsRow[attr] === ERB_SKIP_SENTINEL) { r.attrsSkipped++; r.attrsTotal--; continue; } // prettier-ignore
       if (attr === "id") { if (tsRow.id === railsRow.id) r.attrsMatched++; continue; } // prettier-ignore
       const skipCounter = { n: 0 };
-      const ok = compareValue(tsRow[attr], railsRow[attr], `${rowName}.${attr}`, idIndex, r.notes, snake, skipCounter); // prettier-ignore
+      const ok = compareValue(tsRow[attr], railsRow[attr], `${rowName}.${attr}`, idIndex, r.notes, tableSnake, skipCounter); // prettier-ignore
       if (skipCounter.n > 0) { r.attrsSkipped += skipCounter.n; r.attrsTotal -= skipCounter.n; continue; } // prettier-ignore
       if (ok) r.attrsMatched++;
       else anyDiff = true;

@@ -2,6 +2,7 @@ import { getPathAsync } from "@blazetrails/activesupport";
 import { init } from "./init.js";
 import { generateManifest } from "./generate-manifest.js";
 import { delegateBin } from "./delegate.js";
+import { dbCreate, dbDrop } from "./db-tasks.js";
 
 const HELP = `ar — the CLI for standalone @blazetrails/activerecord projects
 
@@ -13,9 +14,11 @@ Commands:
   typecheck            Type-check your models via trails-tsc
   schema:dump          Dump the current schema via trails-schema-dump
   models:dump          Dump model metadata via trails-models-dump
+  db:create            Create the database for the current TRAILS_ENV
+  db:drop              Drop the database for the current TRAILS_ENV
 
-Coming in later slices: the db:* commands (create, drop, migrate, rollback,
-migrate:status, seed, schema:dump, setup, prepare, reset).
+Coming in later slices: db:migrate, db:rollback, db:migrate:status, db:seed,
+db:setup, db:prepare, db:reset.
 
 Run \`ar <command> --help\` for command-specific help.`;
 
@@ -38,7 +41,7 @@ db.ts (bootstrap glue). Existing files are never overwritten.`;
 /** Commands recognized but deferred to a later slice (see proposal §5). */
 const NOT_IMPLEMENTED = new Set(
   (
-    "generate db:create db:drop db:migrate db:rollback " +
+    "generate db:migrate db:rollback " +
     "db:migrate:status db:seed db:schema:dump db:setup db:prepare db:reset"
   ).split(" "),
 );
@@ -124,6 +127,12 @@ export async function run(argv: string[], cwd: string): Promise<number> {
   }
   if (command === "models:dump") {
     return delegateBin("@blazetrails/activerecord", "trails-models-dump", rest);
+  }
+  if (command === "db:create") {
+    return dbCreate(cwd, rest);
+  }
+  if (command === "db:drop") {
+    return dbDrop(cwd, rest);
   }
   if (NOT_IMPLEMENTED.has(command)) {
     console.error(`ar: "${command}" is not implemented in this slice yet.`);

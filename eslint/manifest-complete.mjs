@@ -8,10 +8,11 @@
  * CLI.
  *
  * NOT autofixable — writing is the CLI's job (`ar generate:manifest`).
- * Enable this rule in any project that has a `models/index.ts` manifest:
+ * Enable this rule in any project that has a `models/index.ts` manifest
+ * (copy the rule file next to your eslint.config.mjs and import it directly):
  *
  *   // eslint.config.mjs in the user app
- *   import manifestComplete from "@blazetrails/activerecord-cli/eslint/manifest-complete";
+ *   import manifestComplete from "./eslint/manifest-complete.mjs";
  *   export default [
  *     {
  *       files: ["**\/models\/index.ts"],
@@ -82,7 +83,7 @@ const rule = {
     // Read model files from disk once per lint run (sync: required for ESLint rules).
     let modelFiles;
     try {
-      modelFiles = new Set(fs.readdirSync(modelsDir).filter(isModelFile));
+      modelFiles = new Set(fs.readdirSync(modelsDir).filter(isModelFile).sort());
     } catch {
       // Directory unreadable — skip silently rather than crashing the lint run.
       return {};

@@ -41,9 +41,8 @@ export async function arConsole(
   type ReplStart = (o: { prompt: string; useGlobal: boolean }) => {
     on(e: string, cb: () => void): void;
   };
-  const startFn: ReplStart = opts.startRepl
-    ? opts.startRepl
-    : ((await import("repl")).start as unknown as ReplStart);
+  const startFn: ReplStart =
+    opts.startRepl ?? ((await import("repl")).start as unknown as ReplStart);
   const replContext = startFn({ prompt: "trails> ", useGlobal: false });
 
   const ctx = (replContext as unknown as { context: Record<string, unknown> }).context;

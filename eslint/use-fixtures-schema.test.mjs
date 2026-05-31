@@ -45,20 +45,42 @@ describe("use-fixtures-schema rule", () => {
       ],
       invalid: [
         {
-          name: "string-array without schema, accessor used in it() → warns",
+          name: "string-array without schema, accessor used → warns with default schemaVar",
           code: `describe("T", () => {
             const { customers } = useFixtures(["customers"], () => conn);
             it("foo", () => { const c = customers("david"); });
           });`,
           errors: [{ messageId: "missingSchema" }],
+          output: `describe("T", () => {
+            const { customers } = useFixtures(["customers"], () => conn, { schema: TEST_SCHEMA });
+            it("foo", () => { const c = customers("david"); });
+          });`,
         },
         {
-          name: "string-array with empty options object, accessor used → warns",
+          name: "detects imported schema name and uses it in message + fix",
+          code: `import { MY_SCHEMA } from "./test-schema.js";
+describe("T", () => {
+  const { customers } = useFixtures(["customers"], () => conn);
+  it("foo", () => { customers("david"); });
+});`,
+          errors: [{ messageId: "missingSchema", data: { schemaVar: "MY_SCHEMA" } }],
+          output: `import { MY_SCHEMA } from "./test-schema.js";
+describe("T", () => {
+  const { customers } = useFixtures(["customers"], () => conn, { schema: MY_SCHEMA });
+  it("foo", () => { customers("david"); });
+});`,
+        },
+        {
+          name: "empty options object replaced, not appended",
           code: `describe("T", () => {
             const { encryptedBooks } = useFixtures(["encryptedBooks"], () => Base.adapter, {});
             it("foo", () => { encryptedBooks("awdr"); });
           });`,
           errors: [{ messageId: "missingSchema" }],
+          output: `describe("T", () => {
+            const { encryptedBooks } = useFixtures(["encryptedBooks"], () => Base.adapter, { schema: TEST_SCHEMA });
+            it("foo", () => { encryptedBooks("awdr"); });
+          });`,
         },
       ],
     });

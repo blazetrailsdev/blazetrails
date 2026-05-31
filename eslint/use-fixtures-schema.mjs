@@ -28,9 +28,10 @@ const rule = {
         "Require `{ schema }` option on `useFixtures(stringArray, ...)` calls so tables are derived and created automatically.",
     },
     schema: [],
+    fixable: "code",
     messages: {
       missingSchema:
-        "`useFixtures` with a fixture-name array requires a `{ schema: ... }` option so the fixture loader can derive and create the necessary tables. Pass e.g. `{ schema: TEST_SCHEMA }` as the third argument.",
+        "`useFixtures` with a fixture-name array requires a `{ schema: ... }` option so the fixture loader can derive and create the necessary tables. Pass e.g. `{ schema: {{schemaVar}} }` as the third argument.",
     },
   },
   create(context) {
@@ -38,8 +39,21 @@ const rule = {
     const candidates = [];
     // Collect describe-body → Set of accessor names that are called inside it().
     const accessorCallsInDescribe = new Map(); // BlockStatement → Set<string>
+    // Collect *_SCHEMA identifiers imported in this file (e.g. TEST_SCHEMA).
+    let schemaVar = null;
 
     return {
+      ImportDeclaration(node) {
+        for (const spec of node.specifiers) {
+          if (
+            spec.type === "ImportSpecifier" &&
+            /SCHEMA$/.test(spec.imported?.name ?? "")
+          ) {
+            schemaVar ??= spec.local.name;
+          }
+        }
+      },
+
       CallExpression(node) {
         const calleeName =
           node.callee?.type === "Identifier" ? node.callee.name : null;
@@ -93,6 +107,7 @@ const rule = {
       },
 
       "Program:exit"() {
+        const sv = schemaVar ?? "TEST_SCHEMA";
         for (const { node, accessorNames } of candidates) {
           // Only report if any accessor name is actually called in an it() body
           // within the enclosing describe scope.
@@ -100,9 +115,26 @@ const rule = {
           if (!descBody) continue;
           const calls = accessorCallsInDescribe.get(descBody) ?? new Set();
           const isUsed = accessorNames.some((n) => calls.has(n));
-          if (isUsed) {
-            context.report({ node, messageId: "missingSchema" });
-          }
+          if (!isUsed) continue;
+
+          const lastArg = node.arguments[node.arguments.length - 1];
+          const hasEmptyOpts =
+            lastArg?.type === "ObjectExpression" &&
+            lastArg.properties.length === 0;
+
+          context.report({
+            node,
+            messageId: "missingSchema",
+            data: { schemaVar: sv },
+            fix(fixer) {
+              if (hasEmptyOpts) {
+                // Replace `{}` with `{ schema: TEST_SCHEMA }`.
+                return fixer.replaceText(lastArg, `{ schema: ${sv} }`);
+              }
+              // Append `, { schema: TEST_SCHEMA }` after the last argument.
+              return fixer.insertTextAfter(lastArg, `, { schema: ${sv} }`);
+            },
+          });
         }
       },
     };

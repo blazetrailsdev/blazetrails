@@ -31,10 +31,12 @@ describe("DbMigrateStatusTest", () => {
   let err: string[];
   let migrateStatusSpy: ReturnType<typeof vi.fn>;
   let withTemporaryPoolFn: ReturnType<typeof vi.fn>;
+  let priorDefaultEnv: string;
 
   beforeEach(() => {
     out = [];
     err = [];
+    priorDefaultEnv = DatabaseConfigurations.defaultEnv;
     vi.spyOn(console, "log").mockImplementation((m) => void out.push(String(m)));
     vi.spyOn(console, "error").mockImplementation((m) => void err.push(String(m)));
     migrateStatusSpy = vi.fn().mockResolvedValue(FIXTURE_ROWS);
@@ -49,6 +51,7 @@ describe("DbMigrateStatusTest", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    DatabaseConfigurations.defaultEnv = priorDefaultEnv;
     DatabaseTasks.databaseConfiguration = null;
     (DatabaseTasks as unknown as { _root: null })._root = null;
   });

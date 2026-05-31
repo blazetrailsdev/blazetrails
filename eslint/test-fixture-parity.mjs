@@ -83,7 +83,7 @@ const rule = {
     schema: [],
     messages: {
       missing:
-        'Rails counterpart for "{{desc}}" uses fixtures, but no `useFixtures` / `useHandlerTransactionalFixtures` call was found in the enclosing describe block.',
+        'Rails counterpart for "{{desc}}" uses fixtures, but no `useFixtures` / `useHandlerTransactionalFixtures` call was found in the enclosing scope.',
     },
   },
   create(context) {

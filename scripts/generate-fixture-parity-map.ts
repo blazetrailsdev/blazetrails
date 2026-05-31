@@ -60,11 +60,10 @@ function processFile(file: string): { trailsRel: string; descs: string[] } | nul
 
   const descs = extractTestDescs(src);
   if (descs.length === 0) return null;
-  const useDescs = descs;
 
   const relPath = path.relative(CASES_DIR, file).replace(/\\/g, "/");
   const trailsRel = railsToTrailsRel(relPath);
-  return { trailsRel, descs: [...new Set(useDescs)].sort() };
+  return { trailsRel, descs: [...new Set(descs)].sort() };
 }
 
 function walk(dir: string, acc: string[] = []): string[] {

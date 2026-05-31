@@ -12,13 +12,19 @@ async function scaffoldProject(dir: string) {
 
 describe("ArRunnerTest", () => {
   let err: string[];
+  let savedEnv: string | undefined;
 
   beforeEach(() => {
     err = [];
+    savedEnv = process.env["TRAILS_ENV"];
     vi.spyOn(console, "error").mockImplementation((m) => void err.push(String(m)));
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (savedEnv === undefined) delete process.env["TRAILS_ENV"];
+    else process.env["TRAILS_ENV"] = savedEnv;
+  });
 
   it("returns 1 when no script path is given", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ar-runner-noarg-"));
@@ -45,10 +51,10 @@ describe("ArRunnerTest", () => {
     );
     await writeFile(
       join(dir, "check.ts"),
-      `import { Base } from "@blazetrails/activerecord";\nif (!Base) throw new Error("Base not found");\nif ((globalThis as any).__ARGV__[0] !== "hello") throw new Error("ARGV mismatch");\n`,
+      `import { Base } from "@blazetrails/activerecord";\nif (!Base) throw new Error("Base not found");\nconst argv = (globalThis as any).__ARGV__;\nif (argv[0] !== "hello") throw new Error("ARGV[0] mismatch");\nif (argv[1] !== "--flag") throw new Error("ARGV[1] flag mismatch");\n`,
       "utf8",
     );
-    const code = await arRunner(dir, ["--env", "test", "check.ts", "hello"]);
+    const code = await arRunner(dir, ["--env", "test", "check.ts", "hello", "--flag"]);
     expect(code).toBe(0);
   });
 

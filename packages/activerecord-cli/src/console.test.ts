@@ -28,13 +28,19 @@ async function scaffoldProject(dir: string) {
 
 describe("ArConsoleTest", () => {
   let err: string[];
+  let savedEnv: string | undefined;
 
   beforeEach(() => {
     err = [];
+    savedEnv = process.env["TRAILS_ENV"];
     vi.spyOn(console, "error").mockImplementation((m) => void err.push(String(m)));
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (savedEnv === undefined) delete process.env["TRAILS_ENV"];
+    else process.env["TRAILS_ENV"] = savedEnv;
+  });
 
   it("launches REPL, puts Base in context, resolves 0 on exit", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ar-console-"));

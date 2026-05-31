@@ -123,75 +123,81 @@ export class SQLiteDatabaseTasks {
 
   async structureDump(filename: string, extraFlags?: string | string[] | null): Promise<void> {
     void extraFlags;
-    const adapter = await this.connectAdapter();
-    const { SchemaDumper } = await import("../connection-adapters/abstract/schema-dumper.js");
-    const ignoreTables = SchemaDumper.ignoreTables;
+    const { adapter, owned } = await this.adapterForOperation();
+    try {
+      const { SchemaDumper } = await import("../connection-adapters/abstract/schema-dumper.js");
+      const ignoreTables = SchemaDumper.ignoreTables;
 
-    // Order so that dependencies resolve during structure_load: create
-    // tables + views first, then their indexes and triggers (which both
-    // reference those tables). Rails' equivalent orders by `type DESC`
-    // because its CLI path runs through sqlite3's shell which resolves
-    // forward-referenced triggers lazily; when re-executing as a script
-    // through better-sqlite3's `db.exec` the statements are applied
-    // strictly in order, so triggers-before-tables would fail.
-    const typeOrder =
-      "CASE type WHEN 'table' THEN 0 WHEN 'view' THEN 1 " +
-      "WHEN 'index' THEN 2 WHEN 'trigger' THEN 3 ELSE 4 END";
-    // Skip SQLite internals (sqlite_sequence, sqlite_stat*, etc.)
-    // — their names are reserved, so re-emitting their CREATE
-    // statements during structureLoad would fail. Rails' .schema CLI
-    // path filters these implicitly; we replicate that here.
-    let where = "WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'";
-    let binds: unknown[] = [];
+      // Order so that dependencies resolve during structure_load: create
+      // tables + views first, then their indexes and triggers (which both
+      // reference those tables). Rails' equivalent orders by `type DESC`
+      // because its CLI path runs through sqlite3's shell which resolves
+      // forward-referenced triggers lazily; when re-executing as a script
+      // through better-sqlite3's `db.exec` the statements are applied
+      // strictly in order, so triggers-before-tables would fail.
+      const typeOrder =
+        "CASE type WHEN 'table' THEN 0 WHEN 'view' THEN 1 " +
+        "WHEN 'index' THEN 2 WHEN 'trigger' THEN 3 ELSE 4 END";
+      // Skip SQLite internals (sqlite_sequence, sqlite_stat*, etc.)
+      // — their names are reserved, so re-emitting their CREATE
+      // statements during structureLoad would fail. Rails' .schema CLI
+      // path filters these implicitly; we replicate that here.
+      let where = "WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'";
+      let binds: unknown[] = [];
 
-    if (ignoreTables.length > 0) {
-      const tablesRows = (await adapter.execute(
-        "SELECT tbl_name FROM sqlite_master WHERE type IN ('table','view','index','trigger')",
-      )) as Array<Record<string, unknown>>;
-      const allTables = Array.from(
-        new Set(tablesRows.map((r) => String(r.tbl_name ?? "")).filter(Boolean)),
-      );
-      const excluded = allTables.filter((name) =>
-        ignoreTables.some((pat) => {
-          if (pat instanceof RegExp) {
-            // Reset lastIndex so global/sticky regex patterns don't
-            // produce false negatives across repeated .test() calls.
-            pat.lastIndex = 0;
-            return pat.test(name);
-          }
-          return pat === name;
-        }),
-      );
-      if (excluded.length > 0) {
-        const placeholders = excluded.map(() => "?").join(", ");
-        where += ` AND tbl_name NOT IN (${placeholders})`;
-        binds = excluded;
+      if (ignoreTables.length > 0) {
+        const tablesRows = (await adapter.execute(
+          "SELECT tbl_name FROM sqlite_master WHERE type IN ('table','view','index','trigger')",
+        )) as Array<Record<string, unknown>>;
+        const allTables = Array.from(
+          new Set(tablesRows.map((r) => String(r.tbl_name ?? "")).filter(Boolean)),
+        );
+        const excluded = allTables.filter((name) =>
+          ignoreTables.some((pat) => {
+            if (pat instanceof RegExp) {
+              // Reset lastIndex so global/sticky regex patterns don't
+              // produce false negatives across repeated .test() calls.
+              pat.lastIndex = 0;
+              return pat.test(name);
+            }
+            return pat === name;
+          }),
+        );
+        if (excluded.length > 0) {
+          const placeholders = excluded.map(() => "?").join(", ");
+          where += ` AND tbl_name NOT IN (${placeholders})`;
+          binds = excluded;
+        }
       }
-    }
 
-    const query = `SELECT sql || ';' AS sql FROM sqlite_master ${where} ORDER BY ${typeOrder}, tbl_name, name`;
-    const rows = (await adapter.execute(query, binds)) as Array<Record<string, unknown>>;
-    const output = rows.map((r) => String(r.sql ?? "")).join("\n");
-    getFs().writeFileSync(filename, output);
-    await this.closeAdapter(adapter);
+      const query = `SELECT sql || ';' AS sql FROM sqlite_master ${where} ORDER BY ${typeOrder}, tbl_name, name`;
+      const rows = (await adapter.execute(query, binds)) as Array<Record<string, unknown>>;
+      const output = rows.map((r) => String(r.sql ?? "")).join("\n");
+      getFs().writeFileSync(filename, output);
+    } finally {
+      if (owned) await this.closeAdapter(adapter);
+    }
   }
 
   async structureLoad(filename: string, extraFlags?: string | string[] | null): Promise<void> {
     void extraFlags;
     const sql = getFs().readFileSync(filename, "utf8");
-    const adapter = await this.connectAdapter();
-    // SQLite's `db.exec` runs an entire script in one shot, so it's safe
-    // for dumps containing trigger bodies (CREATE TRIGGER ... BEGIN ...;
-    // ...; END) where naive semicolon splitting would break.
-    const exec = (adapter as unknown as { exec?: (sql: string) => void }).exec;
-    if (typeof exec === "function") {
-      exec.call(adapter, sql);
-    } else {
-      for (const statement of splitSqlStatements(sql)) {
-        await adapter.executeMutation(statement);
+    const { adapter, owned } = await this.adapterForOperation();
+    try {
+      // SQLite's `db.exec` runs an entire script in one shot, so it's safe
+      // for dumps containing trigger bodies (CREATE TRIGGER ... BEGIN ...;
+      // ...; END) where naive semicolon splitting would break.
+      const exec = (adapter as unknown as { exec?: (sql: string) => void }).exec;
+      if (typeof exec === "function") {
+        exec.call(adapter, sql);
+      } else {
+        for (const statement of splitSqlStatements(sql)) {
+          await adapter.executeMutation(statement);
+        }
       }
+    } finally {
+      if (owned) await this.closeAdapter(adapter);
     }
-    await this.closeAdapter(adapter);
   }
 
   /**
@@ -210,37 +216,40 @@ export class SQLiteDatabaseTasks {
    * the PG/MySQL truncateAll implementations provide.
    */
   async truncateAll(): Promise<void> {
-    const adapter = await this.connectAdapter();
-    const rows = (await adapter.execute(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' " +
-        "AND name <> 'schema_migrations' AND name <> 'ar_internal_metadata'",
-    )) as Array<{ name: string }>;
-    const withFks = adapter as DatabaseAdapter & {
-      disableReferentialIntegrity?: (fn: () => Promise<void>) => Promise<void>;
-    };
-    const run = async () => {
-      for (const row of rows) {
-        await adapter.executeMutation(`DELETE FROM "${row.name.replace(/"/g, '""')}"`);
-      }
-      // Match TRUNCATE/RESTART IDENTITY semantics by clearing the
-      // AUTOINCREMENT counters for the truncated tables. Rails'
-      // SQLite3Adapter#truncate_tables does the same thing.
-      // sqlite_sequence only exists once any AUTOINCREMENT column has
-      // been created — silently skip when it's absent.
-      const hasSequence = (await adapter.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'",
+    const { adapter, owned } = await this.adapterForOperation();
+    try {
+      const rows = (await adapter.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' " +
+          "AND name <> 'schema_migrations' AND name <> 'ar_internal_metadata'",
       )) as Array<{ name: string }>;
-      if (hasSequence.length > 0 && rows.length > 0) {
-        const list = rows.map((r) => `'${r.name.replace(/'/g, "''")}'`).join(", ");
-        await adapter.executeMutation(`DELETE FROM sqlite_sequence WHERE name IN (${list})`);
+      const withFks = adapter as DatabaseAdapter & {
+        disableReferentialIntegrity?: (fn: () => Promise<void>) => Promise<void>;
+      };
+      const run = async () => {
+        for (const row of rows) {
+          await adapter.executeMutation(`DELETE FROM "${row.name.replace(/"/g, '""')}"`);
+        }
+        // Match TRUNCATE/RESTART IDENTITY semantics by clearing the
+        // AUTOINCREMENT counters for the truncated tables. Rails'
+        // SQLite3Adapter#truncate_tables does the same thing.
+        // sqlite_sequence only exists once any AUTOINCREMENT column has
+        // been created — silently skip when it's absent.
+        const hasSequence = (await adapter.execute(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'",
+        )) as Array<{ name: string }>;
+        if (hasSequence.length > 0 && rows.length > 0) {
+          const list = rows.map((r) => `'${r.name.replace(/'/g, "''")}'`).join(", ");
+          await adapter.executeMutation(`DELETE FROM sqlite_sequence WHERE name IN (${list})`);
+        }
+      };
+      if (typeof withFks.disableReferentialIntegrity === "function") {
+        await withFks.disableReferentialIntegrity(run);
+      } else {
+        await run();
       }
-    };
-    if (typeof withFks.disableReferentialIntegrity === "function") {
-      await withFks.disableReferentialIntegrity(run);
-    } else {
-      await run();
+    } finally {
+      if (owned) await this.closeAdapter(adapter);
     }
-    await this.closeAdapter(adapter);
   }
 
   private resolveDbPath(): string {
@@ -264,6 +273,20 @@ export class SQLiteDatabaseTasks {
   private async connectAdapter(): Promise<DatabaseAdapter> {
     const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
     return new SQLite3Adapter(this.resolveDbPath());
+  }
+
+  /**
+   * For in-memory databases the pool connection IS the database — opening a
+   * fresh adapter creates an unrelated empty DB. For file-backed databases a
+   * fresh adapter is correct and doesn't require the pool to be established.
+   * `owned` tells callers whether to close the adapter (pool connections must
+   * not be closed by the caller).
+   */
+  private async adapterForOperation(): Promise<{ adapter: DatabaseAdapter; owned: boolean }> {
+    if (isInMemoryDatabase(this.resolveDbPath())) {
+      return { adapter: await this.connection(), owned: false };
+    }
+    return { adapter: await this.connectAdapter(), owned: true };
   }
 
   private async closeAdapter(adapter: DatabaseAdapter): Promise<void> {

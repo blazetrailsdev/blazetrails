@@ -324,6 +324,15 @@ export class MySQLDatabaseTasks {
   /** @internal */
   private configurationHashWithoutDatabase(): ConfigHash {
     const { database: _db, ...rest } = this.configurationHash;
+    if (rest.url) {
+      try {
+        const parsed = new URL(String(rest.url));
+        parsed.pathname = "/";
+        rest.url = parsed.toString();
+      } catch {
+        // malformed URL — leave as-is and let the adapter surface the error
+      }
+    }
     return rest;
   }
 }

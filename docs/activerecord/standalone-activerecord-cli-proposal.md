@@ -248,7 +248,7 @@ This reinforces the runtime/tooling split and the two-package story (zero-
 declare models _require_ the virtualizer, which now ships with the tooling
 package, exactly where it belongs).
 
-**Dev-only cycle — resolved.** Shipped in #NNNN (see post-merge follow-up
+**Dev-only cycle — resolved.** Shipped in #2748 (see post-merge follow-up
 queue). `activerecord`'s `virtualized-dx-tests` are type-checked by the
 relocated wrapper at `packages/activerecord-cli/dist/tsc-wrapper/cli.js`. The
 dev cycle (`activerecord` devDep → `activerecord-cli` → `activerecord`) is
@@ -355,7 +355,7 @@ reference (#2638).
       in-process instead of spawning a subprocess. Helpers (`introspectTables`,
       `generateModels`, etc.) added to `@blazetrails/activerecord`'s public
       exports so the relocated bins can import them by package name.
-- [x] Done (#NNNN) — **§4.8 trails-tsc full move**. Moved
+- [x] Done (#2748) — **§4.8 trails-tsc full move**. Moved
       `packages/activerecord/src/tsc-wrapper/` (AR virtualizer plugin,
       `ar-program`, model-scanner, cli, tests, fixtures) and the `trails-tsc`
       bin into `packages/activerecord-cli`. Dropped `@blazetrails/trails-tsc`

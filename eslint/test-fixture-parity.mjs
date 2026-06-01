@@ -81,7 +81,11 @@ function allEnclosingDescribeBodies(node) {
   return bodies;
 }
 
-const FIXTURE_CALLEE_NAMES = new Set(["useFixtures", "useHandlerTransactionalFixtures"]);
+const FIXTURE_CALLEE_NAMES = new Set([
+  "useFixtures",
+  "useHandlerTransactionalFixtures",
+  "useHandlerFixtures", // PR #2755: replaces setupHandlerSuite+useHandlerTransactionalFixtures+useFixtures
+]);
 
 const rule = {
   meta: {

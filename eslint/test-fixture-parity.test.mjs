@@ -49,6 +49,11 @@ describe("test-fixture-parity rule", () => {
           code: `describe("T", () => { const fx = useFixtures(["customers"], () => conn); it("find single value object", () => {}); });`,
         },
         {
+          name: "useHandlerFixtures (PR #2755 pattern) satisfies the check",
+          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+          code: `const { topics } = useHandlerFixtures({ topics: [Topic, { r: {} }] }); describe("T", () => { it("find single value object", () => {}); });`,
+        },
+        {
           name: "useHandlerTransactionalFixtures also satisfies",
           filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
           code: `describe("T", () => { useHandlerTransactionalFixtures(); it("find single value object", () => {}); });`,

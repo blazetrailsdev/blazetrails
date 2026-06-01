@@ -111,6 +111,10 @@ export class Post extends Base {
       // Rails: `has_many :comments do ... end` — the inline extension block on
       // Post#comments. Mixed onto the CollectionProxy and any relation spawned
       // off it (e.g. `.offset(1)`), per AssociationsExtensionsTest.
+      // Rails' fourth block method, `newest` (`created.last`), is omitted: it
+      // calls the `created` named scope on `self`, which trails does not yet
+      // forward to `this` inside an extension method (same gap that keeps
+      // `comments.not_again.find_most_recent` on inline models).
       extend: {
         async findMostRecent(this: any) {
           return this.order("id DESC").first();

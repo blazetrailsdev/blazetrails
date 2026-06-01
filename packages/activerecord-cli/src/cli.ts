@@ -288,7 +288,13 @@ export async function run(argv: string[], cwd: string): Promise<number> {
     for (const rel of skipped) console.log(`  skip    ${rel} (already exists)`);
     if (packageJsonUpdated) {
       if (packageJsonUpdated.added.length > 0) {
-        console.log(`  update  package.json: added ${packageJsonUpdated.added.join(", ")}`);
+        const alreadyNote =
+          packageJsonUpdated.alreadyPresent.length > 0
+            ? ` (${packageJsonUpdated.alreadyPresent.join(", ")} already present)`
+            : "";
+        console.log(
+          `  update  package.json: added ${packageJsonUpdated.added.join(", ")}${alreadyNote}`,
+        );
       } else {
         console.log(`  skip    package.json (activerecord deps already present)`);
       }

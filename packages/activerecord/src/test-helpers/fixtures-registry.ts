@@ -79,55 +79,14 @@ export function isJoinTableEntry(e: FixtureRegistryEntry): e is FixtureJoinTable
  * underlying DB table name comes from `model.tableName`, independent of the key here.
  * The `model` thunk dynamic-imports the class so import-time side effects stay lazy.
  *
- * Known gaps — fixture data WITHOUT a registered model (intentionally omitted):
- * - `bad-posts` — no canonical model (arunit2 alt-connection fixture)
- * - `categories-ordered` — no dedicated model (alternate ordering fixture for categories)
- * - `fk-object-to-point-to` — no canonical model
- * - `fk-test-has-fk` — no canonical model
- * - `fk-test-has-pk` — no canonical model
- * - `mixins` — no canonical Mixin model
- * - `other-books` — no canonical model (arunit2 alt-connection fixture)
- * - `other-comments` — no canonical model (arunit2 alt-connection fixture)
- * - `other-posts` — no canonical model (arunit2 alt-connection fixture)
- * - `other-topics` — no canonical model (arunit2 alt-connection fixture)
- * - `randomly-named-a9` — ambiguous — model uses table randomly_named_table1, not this set
- * - `virtual-columns` — no canonical VirtualColumn model
- *
- * Additional gaps — model imports, but the fixture set does NOT seed against the
- * canonical `TEST_SCHEMA` today (verified by the seed-conformance test). Grouped by
- * the underlying loader gap; each is re-addable once that gap closes:
- * (no composite-PK seeding gaps remain — `compositeIdentify` generates absent key
- * columns, so `cpk-books` seeds even when a row omits its key components.)
- * (STI bases with a `type`/custom-inheritance row — `parrots`, `vegetables` — now
- * register their subclasses: the subclasses live in the same model module as the
- * base, and the base's `model` thunk `registerModel`s them so `findStiClass`
- * resolves each row's inheritance-column value and the reload returns the correct
- * subclass instance.)
- * - fixture references a non-column (HABTM assoc name): `developers` (`shared_computers`)
- * - table absent from the canonical SQLite `TEST_SCHEMA`: `uuid-children`, `uuid-parents`
- *
- * Additional gaps — the model seeds, but the fixture data `ref()`s a table that is
- * itself NOT loadable by name (it's gap-listed above). `ref()` falls back to the
- * CRC32 of the target label, which diverges from the target's declared Rails id, so
- * `useFixtures([set])` would seed foreign keys pointing at rows that can't be loaded
- * by name. Re-addable once the ref'd set becomes registerable (verified by the
- * "refs only loadable tables" conformance test):
- * - `cpk-reviews` → `cpk-books`: its rows `ref("cpk_books", …)`, but `ref()`
- *   resolves to a single scalar (the CRC32 label id), not the book's generated
- *   composite `id` key component — composite-target ref resolution is a separate
- *   follow-up.
- * - `developers-projects` — HABTM join table (`developers_projects`); seeds fine via the
- *   join-table loader, but `ref()`s `developers`, which isn't registerable yet (the
- *   `developers` set has a `shared_computers` non-column gap, listed above). Re-add once
- *   `developers` is registerable. The other three HABTM join sets (`categories-posts`,
- *   `parrots-pirates`, `peoples-treasures`) ref only loadable model sets and ARE registered.
- *
- * Subdirectory fixture-set gaps (all top-level + subdir sets fully ported; gaps below are
- * blocker-categorized):
+ * Unregistered fixture sets, grouped by blocker. Add an entry here when a gap closes.
  *
  * **Category A — missing canonical model (model-port work required):**
- * - `categories-ordered`, `fk-object-to-point-to`, `fk-test-has-fk`, `fk-test-has-pk`,
- *   `mixins`, `randomly-named-a9`, `virtual-columns`
+ * - `categories-ordered` — no dedicated model (alternate ordering fixture for categories)
+ * - `fk-object-to-point-to`, `fk-test-has-fk`, `fk-test-has-pk` — no canonical model
+ * - `mixins` — no canonical Mixin model
+ * - `randomly-named-a9` — ambiguous: model uses table randomly_named_table1, not this set
+ * - `virtual-columns` — no canonical VirtualColumn model
  *
  * **Category B — arunit2 alt-connection (needs alt-connection test infra):**
  * - `bad-posts`, `other-books`, `other-comments`, `other-posts`, `other-topics`
@@ -136,10 +95,24 @@ export function isJoinTableEntry(e: FixtureRegistryEntry): e is FixtureJoinTable
  * - `admin/users` — `AdminUser.store("params", { coder: "YAML" })` passes a string
  *   where store() requires an object with `dump()`/`load()`; re-add once the YAML
  *   store coder is implemented.
- * - `developers` — `shared_computers` HABTM non-column ref (listed above).
- * - `developers-projects` — transitively blocked on `developers` (ref() chain).
- * - `cpk-reviews` — composite-PK ref() resolution gap (listed above).
- * - `uuid-children`, `uuid-parents` — tables absent from canonical SQLite TEST_SCHEMA.
+ * - `developers` — `shared_computers` references a HABTM association name, not a column;
+ *   loader can't resolve it.
+ * - `developers-projects` — HABTM join table; `ref()`s `developers`, which isn't
+ *   registerable yet (see `developers` above). The other three HABTM join sets
+ *   (`categories-posts`, `parrots-pirates`, `peoples-treasures`) ref only loadable model
+ *   sets and ARE registered.
+ * - `cpk-reviews` — rows `ref("cpk_books", …)`, but `ref()` resolves to a single scalar
+ *   (the CRC32 label id), not the book's generated composite `id` key component —
+ *   composite-target ref resolution is a follow-up.
+ * - `uuid-children`, `uuid-parents` — tables absent from the canonical SQLite TEST_SCHEMA.
+ * - `naked/yml/{accounts,companies,courses,parrots,trees,…}` — model-less fixture sets
+ *   (no `ActiveRecord::Base` subclass in Rails); need a model-less loader extension
+ *   before they can be registered.
+ *
+ * Note on composite-PK seeding: `compositeIdentify` generates absent key columns, so
+ * `cpk-books` seeds even when a row omits its key components. No composite-PK seeding gaps
+ * remain. STI bases (`parrots`, `vegetables`) register their subclasses via `registerModel`
+ * so `findStiClass` resolves each row's inheritance-column value correctly.
  */
 export const fixtureRegistry = {
   "all/namespaced/accounts": {

@@ -107,6 +107,7 @@ import {
 import {
   runAllCallbacks as cbRunAll,
   runAfterCallbacksOnProto as cbRunAfter,
+  sanitizeForMassAssignment,
 } from "@blazetrails/activemodel";
 import { SignedGlobalID as _SignedGlobalIDCtor } from "@blazetrails/globalid/signed-global-id";
 import {
@@ -2301,6 +2302,10 @@ export class Base extends Model {
 
   constructor(attrs: Record<string, unknown> = {}) {
     (new.target as typeof Base | undefined)?._requireConcreteClass();
+    // Mirrors ActiveModel::AttributeAssignment#assign_attributes: forbid/unwrap
+    // strong-params before anything inspects the attribute bag, so an
+    // un-permitted params object raises ForbiddenAttributesError at construction.
+    attrs = sanitizeForMassAssignment(attrs);
     // Split out constructor-form association values (e.g. `new Owner({items:
     // [...]})`) so super() never sees them as plain attributes. Dispatched
     // after super() so the association proxy exists on `this`.

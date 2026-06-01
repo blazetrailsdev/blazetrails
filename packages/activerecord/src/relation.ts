@@ -11,6 +11,7 @@ import {
 import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper } from "./base.js";
 import { ConnectionNotEstablished, RecordNotSaved, RecordNotUnique } from "./errors.js";
+import { sanitizeForMassAssignment as sanitizeForbiddenAttributes } from "@blazetrails/activemodel";
 import { disallowRawSqlBang } from "./sanitization.js";
 import {
   columnNameMatcher as abstractColumnNameMatcher,
@@ -702,6 +703,11 @@ export class Relation<T extends Base> {
   whereNot(conditions: Record<string, unknown>): Relation<T>;
   whereNot(cols: string[], tuples: unknown[][]): Relation<T>;
   whereNot(conditions: Record<string, unknown> | string[], tuples?: unknown[][]): Relation<T> {
+    // Mirrors WhereChain#not → build_where_clause: unwrap/forbid strong-params
+    // before deriving references or predicates.
+    conditions = sanitizeForbiddenAttributes(conditions as Record<string, unknown>) as
+      | Record<string, unknown>
+      | string[];
     const rel = this._clone();
     for (const t of referencesFromConditions(conditions)) {
       if (!rel._referencesValues.includes(t)) rel._referencesValues.push(t);

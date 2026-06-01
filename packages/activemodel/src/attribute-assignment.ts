@@ -3,6 +3,7 @@ import { UnknownAttributeError } from "./errors.js";
 
 interface PermittedAttributes {
   permitted?(): boolean;
+  toH?(): Record<string, unknown>;
 }
 
 export function assignAttributes(model: AttributeAssignment, newAttributes: unknown): void {
@@ -69,10 +70,14 @@ export function sanitizeForMassAssignment(
   attributes: Record<string, unknown>,
 ): Record<string, unknown> {
   const attrs = attributes as Record<string, unknown> & PermittedAttributes;
+  // Mirrors ActiveModel::ForbiddenAttributesProtection#sanitize_for_mass_assignment:
+  // params-style objects expose `permitted?` — raise unless permitted, then
+  // unwrap via `to_h` so the caller iterates a plain hash, not the wrapper.
   if (typeof attrs.permitted === "function") {
     if (!attrs.permitted()) {
       throw new ForbiddenAttributesError();
     }
+    return typeof attrs.toH === "function" ? attrs.toH() : { ...attributes };
   }
   return attributes;
 }

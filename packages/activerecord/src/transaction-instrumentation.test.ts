@@ -7,6 +7,7 @@ import type { NotificationSubscriber } from "@blazetrails/activesupport";
 import type { DatabaseAdapter } from "./adapter.js";
 import { defineSchema } from "./test-helpers/define-schema.js";
 import { useFixtures } from "./test-helpers/use-fixtures.js";
+import { topicFixtureData } from "./test-helpers/fixtures/topics.js";
 import { TEST_SCHEMA as canonicalSchema } from "./test-helpers/test-schema.js";
 import { SQLite3Adapter } from "./connection-adapters/sqlite3-adapter.js";
 
@@ -64,12 +65,13 @@ describe("TransactionInstrumentationTest", () => {
     Topic.adapter = sharedAdapter;
     await Topic.loadSchema();
   });
-  // No `{ schema }` option here: that registers a `beforeAll` that defines the
-  // schema before `sharedAdapter` exists (it's created per-test in `beforeEach`
-  // for TM isolation). `freshIsolatedAdapter` already creates the full `topics`
-  // schema per test, and a fresh in-memory adapter per test has no cross-file
-  // contamination surface to defend against.
-  const { topics } = useFixtures(["topics"], () => sharedAdapter, { schema: canonicalSchema });
+  // Object-map form (not the `["topics"]` registry form) on purpose: the
+  // registry form requires a `{ schema }` option (use-fixtures-schema rule),
+  // which registers a `beforeAll` that defines the schema before `sharedAdapter`
+  // exists — it's created per-test in `beforeEach` for TM isolation. The
+  // object-map form is exempt from that rule and wires its own schema, which
+  // `freshIsolatedAdapter` already creates per test.
+  const { topics } = useFixtures({ topics: [Topic, topicFixtureData] }, () => sharedAdapter);
   afterEach(() => {
     Notifications.unsubscribeAll();
     vi.restoreAllMocks();

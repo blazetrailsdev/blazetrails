@@ -29,7 +29,7 @@ import { Ship } from "./test-helpers/models/ship.js";
 // adapter is fixed, these tests use a dedicated `lock_people` table holding only
 // the columns they exercise — behaviorally identical to Rails' Person for the
 // lock-version assertions. Follow-up: migrate to the shared `Person` once the
-// MySQL null-string INSERT bug is fixed.
+// MySQL/MariaDB null-string INSERT bug (blazetrailsdev/trails#2783) is fixed.
 class LockNewPerson extends Base {
   static {
     this._tableName = "lock_people";

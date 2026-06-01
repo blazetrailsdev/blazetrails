@@ -14,6 +14,10 @@ import { useHandlerFixtures } from "./test-helpers/use-handler-fixtures.js";
 import { TEST_SCHEMA as canonicalSchema } from "./test-helpers/test-schema.js";
 import { Person } from "./test-helpers/models/person.js";
 import { Frog } from "./test-helpers/models/frog.js";
+import { StringKeyObject } from "./test-helpers/models/string-key-object.js";
+import { LegacyThing } from "./test-helpers/models/legacy-thing.js";
+import { Reference } from "./test-helpers/models/reference.js";
+import { Ship } from "./test-helpers/models/ship.js";
 
 const TEST_SCHEMA = {
   people: { name: "string", first_name: "string", lock_version: "integer", updated_at: "datetime" },
@@ -37,22 +41,52 @@ const TEST_SCHEMA = {
   },
 } as const;
 
+// Bespoke tables that have no canonical fixture set: Rails declares
+// `LockWithoutDefault` / `LockWithCustomColumnWithoutDefault` as top-level
+// classes (not fixtured), and `ReadonlyNameShip < Ship` uses `ships`. These
+// are created locally; the fixture-backed tables (people, legacy_things,
+// references, string_key_objects) come from `useHandlerFixtures` instead.
+const LOCK_SCHEMA = {
+  ships: { name: "string" },
+  lock_without_defaults: { title: "string", lock_version: "integer", updated_at: "datetime" },
+  lock_without_defaults_cust: { title: "string", custom_lock_version: "integer" },
+} as const;
+
 describe("OptimisticLockingTest", () => {
-  setupHandlerSuite();
-  useHandlerTransactionalFixtures();
+  // Mirrors Rails `fixtures :people, :legacy_things, :references,
+  // :string_key_objects`: seed the canonical rows and read them with the shared
+  // Person/LegacyThing/Reference/StringKeyObject models (Rails' `Person.find(1)`
+  // etc.) instead of constructing records inline. `schema` recreates the
+  // canonical tables so the full fixture columns and shared models resolve
+  // regardless of any bespoke variants a sibling file left in the shared worker
+  // DB. The bespoke `LockWithoutDefault*` / `ReadonlyNameShip` tables stay on a
+  // local `defineSchema`.
+  const { people, stringKeyObjects, legacyThings, references } = useHandlerFixtures(
+    ["people", "stringKeyObjects", "legacyThings", "references"],
+    { schema: canonicalSchema },
+  );
   beforeAll(async () => {
-    await defineSchema(TEST_SCHEMA);
+    await defineSchema(LOCK_SCHEMA);
+    // Force-recreate the canonical fixture tables. The worker's canonical
+    // schema preload keeps their signatures cache-warm, so the fixtures' own
+    // `defineSchema` is a no-op — meaning a sibling file that physically
+    // replaced `people`/`references` with a bespoke shape (e.g.
+    // autosave-association's `people: { name, first_name }`) would survive into
+    // this suite. `dropExisting` bypasses the signature cache and rebuilds the
+    // canonical tables the fixtures seed into.
+    await defineSchema(
+      {
+        people: canonicalSchema.people,
+        references: canonicalSchema.references,
+        legacy_things: canonicalSchema.legacy_things,
+        string_key_objects: canonicalSchema.string_key_objects,
+      },
+      { dropExisting: true },
+    );
   });
 
   it("quote value passed lock col", async () => {
-    class Person extends Base {
-      static {
-        this._tableName = "people";
-        this.attribute("first_name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-      }
-    }
-    const p1 = await Person.create({ first_name: "anika" });
+    const p1 = await Person.find(people("michael").id);
     expect(p1.lock_version).toBe(0);
     p1.first_name = "anika2";
     await p1.saveBang();
@@ -60,17 +94,8 @@ describe("OptimisticLockingTest", () => {
   });
 
   it("non integer lock existing", async () => {
-    class StringKeyObject extends Base {
-      static {
-        this._tableName = "string_key_objects";
-        this.attribute("id", "string");
-        this.primaryKey = "id";
-        this.attribute("name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-      }
-    }
-    const s1 = await StringKeyObject.create({ id: "record1", name: "original" });
-    const s2 = await StringKeyObject.find("record1");
+    const s1 = await StringKeyObject.find(stringKeyObjects("first").id);
+    const s2 = await StringKeyObject.find(stringKeyObjects("first").id);
     expect(s1.lock_version).toBe(0);
     expect(s2.lock_version).toBe(0);
     s1.name = "updated record";
@@ -82,17 +107,8 @@ describe("OptimisticLockingTest", () => {
   });
 
   it("non integer lock destroy", async () => {
-    class StringKeyObject extends Base {
-      static {
-        this._tableName = "string_key_objects";
-        this.attribute("id", "string");
-        this.primaryKey = "id";
-        this.attribute("name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-      }
-    }
-    const s1 = await StringKeyObject.create({ id: "rec1", name: "original" });
-    const s2 = await StringKeyObject.find("rec1");
+    const s1 = await StringKeyObject.find(stringKeyObjects("first").id);
+    const s2 = await StringKeyObject.find(stringKeyObjects("first").id);
     expect(s1.lock_version).toBe(0);
     expect(s2.lock_version).toBe(0);
     s1.name = "updated record";
@@ -102,22 +118,15 @@ describe("OptimisticLockingTest", () => {
     await expect(s2.destroy()).rejects.toThrow(StaleObjectError);
     await s1.destroy();
     expect(s1.isDestroyed()).toBe(true);
-    await expect(StringKeyObject.find("rec1")).rejects.toThrow();
+    await expect(StringKeyObject.find(stringKeyObjects("first").id)).rejects.toThrow();
   });
 
   it("lock existing", async () => {
-    class Person extends Base {
-      static {
-        this._tableName = "people";
-        this.attribute("first_name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-      }
-    }
-    const p1 = await Person.create({ first_name: "stu" });
-    const p2 = await Person.find(p1.id);
+    const p1 = await Person.find(people("michael").id);
+    const p2 = await Person.find(people("michael").id);
     expect(p1.lock_version).toBe(0);
     expect(p2.lock_version).toBe(0);
-    p1.first_name = "stu2";
+    p1.first_name = "stu";
     await p1.saveBang();
     expect(p1.lock_version).toBe(1);
     expect(p2.lock_version).toBe(0);
@@ -126,40 +135,38 @@ describe("OptimisticLockingTest", () => {
   });
 
   it("lock destroy", async () => {
-    class Person extends Base {
+    // Reads the `michael` fixture (Rails' `Person.find(1)`) but through an
+    // association-free model: the canonical Person's `dependent: :destroy` HMT
+    // graph (jobsWithDependentDestroy → references → job) isn't resolvable on
+    // the destroy path yet. Follow-up: use the shared Person once through-
+    // association dependent destroy resolves its source class.
+    class LockPerson extends Base {
       static {
         this._tableName = "people";
         this.attribute("first_name", "string");
         this.attribute("lock_version", "integer", { default: 0 });
       }
     }
-    const p1 = await Person.create({ first_name: "stu" });
-    const p2 = await Person.find(p1.id);
+    const p1 = await LockPerson.find(people("michael").id);
+    const p2 = await LockPerson.find(people("michael").id);
     expect(p1.lock_version).toBe(0);
     expect(p2.lock_version).toBe(0);
-    p1.first_name = "stu2";
+    p1.first_name = "stu";
     await p1.saveBang();
     expect(p1.lock_version).toBe(1);
     expect(p2.lock_version).toBe(0);
     await expect(p2.destroy()).rejects.toThrow(StaleObjectError);
     await p1.destroy();
     expect(p1.isDestroyed()).toBe(true);
-    await expect(Person.find(p1.id)).rejects.toThrow();
+    await expect(LockPerson.find(people("michael").id)).rejects.toThrow();
   });
 
   it("lock repeating", async () => {
-    class Person extends Base {
-      static {
-        this._tableName = "people";
-        this.attribute("first_name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-      }
-    }
-    const p1 = await Person.create({ first_name: "stu" });
-    const p2 = await Person.find(p1.id);
+    const p1 = await Person.find(people("michael").id);
+    const p2 = await Person.find(people("michael").id);
     expect(p1.lock_version).toBe(0);
     expect(p2.lock_version).toBe(0);
-    p1.first_name = "stu2";
+    p1.first_name = "stu";
     await p1.saveBang();
     expect(p1.lock_version).toBe(1);
     expect(p2.lock_version).toBe(0);
@@ -170,13 +177,6 @@ describe("OptimisticLockingTest", () => {
   });
 
   it("lock new", async () => {
-    class Person extends Base {
-      static {
-        this._tableName = "people";
-        this.attribute("first_name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-      }
-    }
     const p1 = new Person({ first_name: "anika" });
     expect(p1.lock_version).toBe(0);
     p1.first_name = "anika2";
@@ -193,13 +193,6 @@ describe("OptimisticLockingTest", () => {
   });
 
   it("lock exception record", async () => {
-    class Person extends Base {
-      static {
-        this._tableName = "people";
-        this.attribute("first_name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-      }
-    }
     const p1 = new Person({ first_name: "mira" });
     expect(p1.lock_version).toBe(0);
     p1.first_name = "mira2";
@@ -222,41 +215,19 @@ describe("OptimisticLockingTest", () => {
   });
 
   it("lock new when explicitly passing nil", async () => {
-    class Person extends Base {
-      static {
-        this._tableName = "people";
-        this.attribute("first_name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-      }
-    }
     const p1 = new Person({ first_name: "anika", lock_version: null });
     await p1.saveBang();
     expect(p1.lock_version).toBe(0);
   });
 
   it("lock new when explicitly passing value", async () => {
-    class Person extends Base {
-      static {
-        this._tableName = "people";
-        this.attribute("first_name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-      }
-    }
     const p1 = new Person({ first_name: "Douglas Adams", lock_version: 42 });
     await p1.saveBang();
     expect(p1.lock_version).toBe(42);
   });
 
   it("touch existing lock", async () => {
-    class Person extends Base {
-      static {
-        this._tableName = "people";
-        this.attribute("first_name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-        this.attribute("updated_at", "datetime");
-      }
-    }
-    const p1 = await Person.create({ first_name: "Szymon" });
+    const p1 = await Person.find(people("michael").id);
     expect(p1.lock_version).toBe(0);
     await p1.touch();
     expect(p1.lock_version).toBe(1);
@@ -265,14 +236,6 @@ describe("OptimisticLockingTest", () => {
   });
 
   it("touch stale object", async () => {
-    class Person extends Base {
-      static {
-        this._tableName = "people";
-        this.attribute("first_name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-        this.attribute("updated_at", "datetime");
-      }
-    }
     const person = await Person.create({ first_name: "Mehmet Emin" });
     const stalePerson = await Person.find(person.id);
     await person.update({ first_name: "Updated" });
@@ -291,31 +254,16 @@ describe("OptimisticLockingTest", () => {
   });
 
   it("explicit update lock column raise error", async () => {
-    class Person extends Base {
-      static {
-        this._tableName = "people";
-        this.attribute("first_name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-      }
-    }
-    const person = await Person.create({ first_name: "Douglas Adams" });
-    person.first_name = "Douglas Adams2";
+    const person = await Person.find(people("michael").id);
+    person.first_name = "Douglas Adams";
     person.lock_version = 42;
     expect(person.attributeChanged("lock_version")).toBe(true);
     await expect(person.save()).rejects.toThrow(StaleObjectError);
   });
 
   it("lock column name existing", async () => {
-    class LegacyThing extends Base {
-      static {
-        this._tableName = "legacy_things";
-        this.lockingColumn = "version";
-        this.attribute("tps_report_number", "integer");
-        this.attribute("version", "integer", { default: 0 });
-      }
-    }
-    const t1 = await LegacyThing.create({ tps_report_number: 500 });
-    const t2 = await LegacyThing.find(t1.id);
+    const t1 = await LegacyThing.find(legacyThings("obtuse").id);
+    const t2 = await LegacyThing.find(legacyThings("obtuse").id);
     expect(t1.version).toBe(0);
     expect(t2.version).toBe(0);
     t1.tps_report_number = 700;
@@ -327,13 +275,6 @@ describe("OptimisticLockingTest", () => {
   });
 
   it("lock column is mass assignable", async () => {
-    class Person extends Base {
-      static {
-        this._tableName = "people";
-        this.attribute("first_name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-      }
-    }
     const p1 = await Person.create({ first_name: "bianca" });
     expect(p1.lock_version).toBe(0);
     expect(p1.lock_version).toBe(new Person(p1.attributes).lock_version);
@@ -531,11 +472,8 @@ describe("OptimisticLockingTest", () => {
   });
 
   it("readonly attributes", async () => {
-    class ReadonlyNameShip extends Base {
+    class ReadonlyNameShip extends Ship {
       static {
-        this._tableName = "people";
-        this.attribute("name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
         this.attrReadonly("name");
       }
     }
@@ -549,14 +487,7 @@ describe("OptimisticLockingTest", () => {
   });
 
   it("quote table name reserved word references", async () => {
-    class Reference extends Base {
-      static {
-        this._tableName = "references";
-        this.attribute("favorite", "boolean");
-        this.attribute("lock_version", "integer", { default: 0 });
-      }
-    }
-    const ref = await Reference.create({ favorite: false });
+    const ref = await Reference.find(references("michael_magician").id);
     ref.favorite = !ref.favorite;
     await ref.save();
     expect(ref.favorite).toBe(true);
@@ -564,13 +495,6 @@ describe("OptimisticLockingTest", () => {
   });
 
   it("update without attributes does not only update lock version", async () => {
-    class Person extends Base {
-      static {
-        this._tableName = "people";
-        this.attribute("first_name", "string");
-        this.attribute("lock_version", "integer", { default: 0 });
-      }
-    }
     const p1 = await Person.create({ first_name: "anika" });
     const lockVersion = p1.lock_version;
     await p1.save();

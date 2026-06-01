@@ -9,8 +9,8 @@ import path from "path";
 // continues to cover all files; this job verifies migrated files pass under
 // the stricter no-DDL-per-test contract.
 //
-// To run locally:
-//   PG_TEST_URL=postgres://... pnpm vitest run --config vitest.pg-canary.config.ts
+// To run locally (AR_DB_FORKS must match the number of slot DBs globalSetup provisions):
+//   AR_DB_FORKS=1 PG_TEST_URL=postgres://... pnpm vitest run --config vitest.pg-canary.config.ts
 
 const MIGRATED_FILES = ["packages/activerecord/src/coders/json.test.ts"];
 
@@ -147,8 +147,10 @@ const alias = {
   "@blazetrails/nokogiri": path.resolve(__dirname, "packages/nokogiri/src/index.ts"),
 };
 
+// Default to AR_DB_FORKS (or 1) so TEST_FORKS never exceeds the number of slot
+// DBs globalSetup provisioned. CI sets AR_DB_FORKS=4; unset local runs get 1.
 const _parsedForks = parseInt(process.env.TRAILS_TEST_FORKS ?? process.env.AR_DB_FORKS ?? "", 10);
-const TEST_FORKS = Number.isFinite(_parsedForks) && _parsedForks > 0 ? _parsedForks : 4;
+const TEST_FORKS = Number.isFinite(_parsedForks) && _parsedForks > 0 ? _parsedForks : 1;
 
 export default defineConfig({
   resolve: { alias },

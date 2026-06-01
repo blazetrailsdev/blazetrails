@@ -1022,6 +1022,10 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       }
     }
 
+    // RETURNING is appended outside Rails' raw-alias-syntax branch, so it
+    // applies to the legacy path too (MariaDB >= 10.5 sets supportsInsertReturning).
+    const ret = insert.returning();
+    if (ret) sql += ` RETURNING ${ret}`;
     return sql;
   }
 

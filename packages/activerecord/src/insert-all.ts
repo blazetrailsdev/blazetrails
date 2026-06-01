@@ -457,6 +457,11 @@ export class InsertAll {
  * The fragment surface an adapter's `buildInsertSql` consumes to assemble a
  * dialect-specific INSERT statement. Mirrors the methods Rails'
  * `ActiveRecord::InsertAll::Builder` exposes to `connection.build_insert_sql`.
+ *
+ * Note: unlike Rails' two-fragment split (`"INSERT #{insert.into} #{insert.values_list}"`),
+ * `into()` here bundles the compiled `VALUES (...)` list, so adapters emit just
+ * `INSERT ${insert.into()}`. `Builder.valuesList()` still exists for the compile
+ * step but isn't part of this contract.
  */
 export interface InsertBuilder {
   into(): string;
@@ -612,13 +617,15 @@ export class Builder implements InsertBuilder {
     return new Visitors.SQLite(q);
   }
 
-  /** @internal Quoted no-op column for MySQL `ON DUPLICATE KEY UPDATE col=col`. */
+  /**
+   * Quoted no-op column for MySQL `ON DUPLICATE KEY UPDATE col=col`.
+   * Mirrors Rails `no_op_column = quote_column_name(insert.keys.first) if insert.keys.first`
+   * — the first explicit insert key, no timestamps, nil when there are none.
+   * @internal
+   */
   firstColumn(): string | undefined {
-    const keys = [...this._insertAll.keysIncludingTimestamps()];
-    if (keys.length > 0) return `"${keys[0]}"`;
-    const pk = this._insertAll.primaryKeys();
-    if (pk.length > 0) return `"${pk[0]}"`;
-    return undefined;
+    const [first] = this._insertAll.keys;
+    return first === undefined ? undefined : `"${first}"`;
   }
 
   private _arrayColumnSet(): Set<string> {

@@ -4,13 +4,7 @@
  * Mirrors: activerecord/test/cases/locking_test.rb
  */
 import { describe, it, expect, beforeAll } from "vitest";
-import {
-  Base,
-  transaction,
-  registerModel,
-  StaleObjectError,
-  ReadonlyAttributeError,
-} from "./index.js";
+import { Base, registerModel, StaleObjectError, ReadonlyAttributeError } from "./index.js";
 import { Associations } from "./associations.js";
 
 import { defineSchema } from "./test-helpers/define-schema.js";
@@ -714,7 +708,7 @@ describe("PessimisticLockingTest", () => {
   const { people } = useHandlerFixtures(["people"], { schema: canonicalSchema });
 
   it("typical find with lock", async () => {
-    await transaction(Person, async () => {
+    await Person.transaction(async () => {
       const locked = await Person.all().lock().find(people("michael").id);
       expect((locked as any).first_name).toBe("Michael");
     });

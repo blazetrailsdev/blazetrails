@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, it, expect } from "vitest";
 import { DatabaseConfigurations } from "../database-configurations.js";
 import type { RawConfigurations } from "../database-configurations.js";
+import { AdapterNotFound } from "../errors.js";
+// connection-handling registers the adapter class resolver that validateBang()
+// relies on (same import hash-config.test.ts uses) so the "url invalid adapter"
+// case resolves the adapter rather than throwing "resolver not registered".
+import "../connection-handling.js";
 
 function resolveDbConfig(poolConfig: string, config: RawConfigurations = {}) {
   const configs = new DatabaseConfigurations(config);
@@ -17,8 +22,14 @@ describe("PoolConfig", () => {
       DatabaseConfigurations.defaultEnv = "development";
     });
 
-    it.skip("url invalid adapter", () => {
-      // BLOCKED: connection-pool — requires Base.connection_handler.establish_connection
+    it("url invalid adapter", async () => {
+      // Rails drives this through Base.connection_handler.establish_connection; the
+      // trails resolver suite tests the resolver level (configs.resolve), so we
+      // resolve + validate the config directly. An unknown adapter in the URL
+      // (scheme "ridiculous" → adapter "ridiculous") fails adapter resolution.
+      await expect(
+        resolveDbConfig("ridiculous://foo?encoding=utf8").validateBang(),
+      ).rejects.toBeInstanceOf(AdapterNotFound);
     });
 
     it("url from environment", () => {
@@ -142,8 +153,12 @@ describe("PoolConfig", () => {
       });
     });
 
-    it.skip("pool config with invalid type", () => {
-      // BLOCKED: connection-pool — requires Base.connection_handler.establish_connection
+    it("pool config with invalid type", () => {
+      // Rails passes Object.new to establish_connection and expects a TypeError;
+      // resolve() raises the same for a value that is neither a string, a hash,
+      // nor a DatabaseConfig.
+      const configs = new DatabaseConfigurations({});
+      expect(() => configs.resolve(123 as unknown)).toThrow(TypeError);
     });
   });
 });

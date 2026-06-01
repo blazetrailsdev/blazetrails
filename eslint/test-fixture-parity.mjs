@@ -22,6 +22,13 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MAPPING_PATH =
   process.env.TEST_FIXTURE_PARITY_MAP_PATH ?? path.resolve(__dirname, "test-fixture-parity.json");
+// Ratcheted baseline of files exempt from the hard `error` gate — backlog
+// tests that port Rails fixture-tests with inline models rather than
+// `useFixtures`. Mirrors the `expected-fixtures` precedent; ratchet down as
+// porters migrate those files onto fixture accessors.
+const EXCLUDE_PATH =
+  process.env.TEST_FIXTURE_PARITY_EXCLUDE_PATH ??
+  path.resolve(__dirname, "test-fixture-parity-exclude.json");
 
 let mappingCache = null;
 let mappingCacheMtime = -1;
@@ -35,6 +42,24 @@ function loadMapping() {
   mappingCache = out;
   mappingCacheMtime = mtime;
   return mappingCache;
+}
+
+let excludeCache = null;
+let excludeCacheMtime = -1;
+function loadExclude() {
+  if (!fs.existsSync(EXCLUDE_PATH)) return new Set();
+  const mtime = fs.statSync(EXCLUDE_PATH).mtimeMs;
+  if (excludeCache && mtime === excludeCacheMtime) return excludeCache;
+  excludeCache = new Set(JSON.parse(fs.readFileSync(EXCLUDE_PATH, "utf8")));
+  excludeCacheMtime = mtime;
+  return excludeCache;
+}
+
+/** Repo-relative path (`packages/activerecord/src/…`) for exclude-list lookup. */
+function repoRel(filename) {
+  const norm = filename.replace(/\\/g, "/");
+  const m = norm.match(/(?:^|\/)(packages\/activerecord\/src\/.+\.test\.ts)$/);
+  return m ? m[1] : null;
 }
 
 function trailsRelKey(filename) {
@@ -159,6 +184,10 @@ const rule = {
     const filename = context.filename ?? context.getFilename();
     const key = trailsRelKey(filename);
     if (!key) return {};
+
+    // Ratcheted backlog — excluded files no-op under the hard `error` gate.
+    const rel = repoRel(filename);
+    if (rel && loadExclude().has(rel)) return {};
 
     const mapping = loadMapping();
     const fixtureDescs = mapping[key];

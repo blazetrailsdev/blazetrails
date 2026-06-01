@@ -22,8 +22,7 @@ export default {
 };
 `;
 
-/** Swap the database name in a postgres URL, preserving credentials/host/port. */
-function swapDbName(url: string, dbName: string): string {
+function pgUrlWithDb(url: string, dbName: string): string {
   const parsed = new URL(url);
   parsed.pathname = `/${dbName}`;
   return parsed.toString();
@@ -31,15 +30,12 @@ function swapDbName(url: string, dbName: string): string {
 
 describe.skipIf(!PG_URL)("postgres-happy-path E2E", () => {
   let tmpDir: string;
-  let dbName: string;
   let dbUrl: string;
   let origTrailsEnv: string | undefined;
 
   beforeEach(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), "ar-cli-e2e-pg-"));
-    // Unique DB per run so parallel/consecutive runs don't collide.
-    dbName = `ar_cli_e2e_${process.hrtime.bigint()}`;
-    dbUrl = swapDbName(PG_URL!, dbName);
+    dbUrl = pgUrlWithDb(PG_URL!, `ar_cli_e2e_${process.hrtime.bigint()}`);
     origTrailsEnv = process.env.TRAILS_ENV;
     process.env.TRAILS_ENV = "development";
   });
@@ -53,13 +49,10 @@ describe.skipIf(!PG_URL)("postgres-happy-path E2E", () => {
     }
     // Best-effort drop — ignore errors if create never succeeded.
     try {
-      vi.spyOn(console, "log").mockImplementation(() => {});
-      vi.spyOn(console, "error").mockImplementation(() => {});
       await run(["db:drop"], tmpDir);
     } catch {
       // ignore
     }
-    vi.restoreAllMocks();
     DatabaseTasks.databaseConfiguration = null;
     (DatabaseTasks as unknown as { _root: string | null })._root = null;
     DatabaseTasks.registerMigrations([]);
@@ -71,11 +64,11 @@ describe.skipIf(!PG_URL)("postgres-happy-path E2E", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
 
-    // 1. ar init --driver pg — scaffolds config/database.ts (sqlite default), db/migrate/, etc.
+    // 1. ar init — scaffolds config/database.ts, db/migrate/, app/models/, db.ts
     const initCode = await run(["init", "--driver", "pg"], tmpDir);
     expect(initCode, "ar init should exit 0").toBe(0);
 
-    // 2. Overwrite config/database.ts to point at our unique PG test DB.
+    // 2. Overwrite config/database.ts: init scaffolds a sqlite default; replace with our unique PG DB.
     const pgConfig = `const config = {
   development: { adapter: "postgresql", url: "${dbUrl}" },
   test:        { adapter: "postgresql", url: "${dbUrl}" },
@@ -85,11 +78,11 @@ export default config;
 `;
     await writeFile(join(tmpDir, "config", "database.ts"), pgConfig, "utf8");
 
-    // 3. ar db:create — creates the unique PG database.
+    // 3. ar db:create
     const createCode = await run(["db:create"], tmpDir);
     expect(createCode, "ar db:create should exit 0").toBe(0);
 
-    // 4. ar generate:migration AddUsersTable — emits a stub migration file.
+    // 4. ar generate:migration AddUsersTable
     const genCode = await run(["generate:migration", "AddUsersTable"], tmpDir);
     expect(genCode, "ar generate:migration should exit 0").toBe(0);
 
@@ -101,14 +94,14 @@ export default config;
     const migrationPath = join(migrateDir, migrationEntry!);
     const version = migrationEntry!.split("_")[0]!;
 
-    // 5. Patch the migration with a real table-creating body.
+    // 5. Patch the generated migration
     await writeFile(migrationPath, MIGRATION_BODY, "utf8");
 
-    // 6. ar db:migrate — applies the migration, stamps schema_migrations.
+    // 6. ar db:migrate
     const migrateCode = await run(["db:migrate"], tmpDir);
     expect(migrateCode, "ar db:migrate should exit 0").toBe(0);
 
-    // 7. ar db:version — should report the applied version.
+    // 7. ar db:version
     const versionLines: string[] = [];
     vi.spyOn(console, "log").mockImplementation(
       (...args) => void versionLines.push(args.map(String).join(" ")),
@@ -117,7 +110,7 @@ export default config;
     expect(versionCode, "ar db:version should exit 0").toBe(0);
     expect(versionLines.join("\n")).toContain(`Current version: ${version}`);
 
-    // 8. ar db:migrate:status — should show the migration as "up".
+    // 8. ar db:migrate:status
     const statusLines: string[] = [];
     vi.spyOn(console, "log").mockImplementation(
       (...args) => void statusLines.push(args.map(String).join(" ")),

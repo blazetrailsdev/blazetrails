@@ -1,0 +1,71 @@
+name: AR PG Canary
+
+# Runs the subset of activerecord tests that have been migrated to the
+# transactional-fixtures architecture (useFixtures + withTransactionalFixtures,
+# no per-test defineSchema DDL). PostgreSQL only.
+#
+# Add files to MIGRATED_FILES in vitest.pg-canary.config.ts as they are
+# converted. This job runs in parallel with the existing postgres-tests job;
+# once all files are migrated, postgres-tests can be retired.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/activerecord/**"
+      - "packages/arel/**"
+      - "packages/activemodel/**"
+      - "packages/activesupport/**"
+      - "vitest.pg-canary.config.ts"
+      - ".github/workflows/ar-pg-canary.yml"
+      - "pnpm-lock.yaml"
+  pull_request:
+    paths:
+      - "packages/activerecord/**"
+      - "packages/arel/**"
+      - "packages/activemodel/**"
+      - "packages/activesupport/**"
+      - "vitest.pg-canary.config.ts"
+      - ".github/workflows/ar-pg-canary.yml"
+      - "pnpm-lock.yaml"
+
+jobs:
+  ar-pg-canary:
+    name: AR PG Canary
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: rails_js_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.27.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Create parallel test databases
+        run: |
+          for i in 2 3 4; do
+            PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE rails_js_test_$i;"
+          done
+      - name: Run canary suite
+        run: pnpm vitest run --config vitest.pg-canary.config.ts
+        env:
+          PG_TEST_URL: postgres://postgres:postgres@localhost:5432/rails_js_test
+          AR_DB_FORKS: 4
+          TEST_ADAPTER: postgresql

@@ -9,8 +9,17 @@
  *   row accessor in their body are NOT marked: the rule gates literal accessor
  *   usage, so whole-file marking just produced false-positives for tests that
  *   exercise infrastructure (e.g. connection-handler) or build records inline.
- *   Trade-off: tests that touch fixture rows only indirectly (via model queries
- *   without a literal `foo(:record)` call) are no longer gated.
+ *
+ *   Trade-off (measured): Rails commonly reads fixture rows through the model
+ *   (`Post.first`) rather than the `posts(:welcome)` accessor, so dropping the
+ *   fallback also un-gates ~31 files whose trails port DID migrate to
+ *   `useFixtures` accessors — they stay green, they just lose the
+ *   un-migration ratchet. A model-aware signal (mark on the `classify()`'d
+ *   model constant) was evaluated to recover them and rejected: a model
+ *   reference ≠ fixture-row use, so it re-introduced the documented
+ *   false-positives (database-tasks, query-logs, …). Restoring the ratchet
+ *   without false-positives would require reading the trails sources — a
+ *   separate change.
  *
  * Run: pnpm tsx scripts/generate-fixture-parity-map.ts  (commit the result).
  */
@@ -118,11 +127,11 @@ function processFile(file: string): { trailsRel: string; descs: string[] } | nul
   const fixtureNames = collectFixtureNames(src);
   if (fixtureNames.length === 0) return null;
 
-  const tests = extractTests(src);
-  if (tests.length === 0) return null;
-
   const accessorRe = buildAccessorRe(fixtureNames);
   if (!accessorRe) return null;
+
+  const tests = extractTests(src);
+  if (tests.length === 0) return null;
 
   // Mark only tests that call a fixture row accessor in their body. Tests that
   // declare fixtures but never reference a row are not gated (see header).

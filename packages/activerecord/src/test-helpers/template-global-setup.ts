@@ -202,24 +202,35 @@ const mysqlAdapter: DbTemplateAdapter = {
     const { Mysql2Adapter } = await import("../connection-adapters/mysql2-adapter.js");
     const baseUrl = process.env.MYSQL_TEST_URL!;
     const baseDb = new URL(baseUrl).pathname.replace(/^\//, "");
-    const admin = await mysql.createConnection(mysqlConnOpts(baseUrl));
+    const n = slotCount();
 
-    for (let slot = 1; slot <= slotCount(); slot++) {
+    // CREATE DATABASE for all slots first (sequential — DDL against the same
+    // server, DROP/CREATE must not race with themselves).
+    const admin = await mysql.createConnection(mysqlConnOpts(baseUrl));
+    for (let slot = 1; slot <= n; slot++) {
       const slotDb = slot === 1 ? baseDb : `${baseDb}_${slot}`;
       await admin.query(`DROP DATABASE IF EXISTS \`${slotDb}\``);
       await admin.query(`CREATE DATABASE \`${slotDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_bin`);
-      const slotUrl = mysqlSlotUrl(baseUrl, slot);
-      const adapter = new Mysql2Adapter({
-        uri: slotUrl,
-        connectionLimit: 1,
-        flags: ["FOUND_ROWS"],
-      }) as unknown as DatabaseAdapter;
-      await buildTemplateSchema(adapter, async () => {
-        await (adapter as unknown as { disconnect(): Promise<void> }).disconnect?.();
-      });
     }
-
     await admin.end();
+
+    // Run defineSchema against each slot DB in parallel — each slot is an
+    // independent DB so there are no cross-slot conflicts. This mirrors how
+    // the old per-worker preload ran DDL in parallel across forks, keeping
+    // wall-clock cost at ~1× rather than N× sequential.
+    await Promise.all(
+      Array.from({ length: n }, (_, i) => i + 1).map(async (slot) => {
+        const adapter = new Mysql2Adapter({
+          uri: mysqlSlotUrl(baseUrl, slot),
+          connectionLimit: 1,
+          flags: ["FOUND_ROWS"],
+        }) as unknown as DatabaseAdapter;
+        await buildTemplateSchema(adapter, async () => {
+          await (adapter as unknown as { disconnect(): Promise<void> }).disconnect?.();
+        });
+      }),
+    );
+
     process.env[MYSQL_TEMPLATE_ENV] = "1";
     return undefined;
   },

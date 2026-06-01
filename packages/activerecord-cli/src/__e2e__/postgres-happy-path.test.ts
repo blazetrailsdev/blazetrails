@@ -41,17 +41,18 @@ describe.skipIf(!PG_URL)("postgres-happy-path E2E", () => {
   });
 
   afterEach(async () => {
+    // Drop before restoring mocks so the test's existing console suppressors
+    // keep teardown quiet. Best-effort — ignore if create never succeeded.
+    try {
+      await run(["db:drop"], tmpDir);
+    } catch {
+      // ignore
+    }
     vi.restoreAllMocks();
     if (origTrailsEnv === undefined) {
       delete process.env.TRAILS_ENV;
     } else {
       process.env.TRAILS_ENV = origTrailsEnv;
-    }
-    // Best-effort drop — ignore errors if create never succeeded.
-    try {
-      await run(["db:drop"], tmpDir);
-    } catch {
-      // ignore
     }
     DatabaseTasks.databaseConfiguration = null;
     (DatabaseTasks as unknown as { _root: string | null })._root = null;

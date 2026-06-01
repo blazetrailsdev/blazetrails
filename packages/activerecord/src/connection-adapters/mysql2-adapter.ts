@@ -1090,6 +1090,14 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       [schema ?? null, table],
     )) as Array<Record<string, unknown>>;
 
+    // The bare-string "NULL" default below is a MariaDB-only reflection quirk and the
+    // disambiguation is engine-specific (see the coercion comment). Ensure the cached
+    // version/_mariadb flag is populated before the map needs it — but only when a row
+    // actually carries that token, so the common path adds no round-trip.
+    if (rows.some((r) => (r.default_value ?? r.DEFAULT_VALUE) === "NULL")) {
+      await this.getFullVersion();
+    }
+
     return rows.map((r) => {
       const name = String((r.name ?? r.NAME ?? r.COLUMN_NAME) as string);
       const sqlType = String((r.full_type ?? r.FULL_TYPE ?? r.COLUMN_TYPE ?? "") as string);
@@ -1142,11 +1150,15 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       let defFn: string | null = null;
       // MariaDB stores column defaults as expressions and reports a nullable column's
       // implicit `DEFAULT NULL` as the bare string "NULL" in information_schema (MySQL
-      // returns a real SQL NULL). The abstract SHOW-CREATE path folds this via
-      // defaultType→:function; here we coerce it to an actual null so new records get a
-      // nil default instead of the 4-char string. A genuine string default is reported
-      // quoted ("'NULL'"), so matching the unquoted token is unambiguous.
-      if (def === "NULL") def = null;
+      // returns a real SQL NULL there). Coerce it to an actual null so new records get a
+      // nil default instead of the 4-char string. Gated on MariaDB: there a genuine
+      // string default is reported *quoted* ("'NULL'"), so the unquoted token is
+      // unambiguously SQL null — whereas MySQL reports a literal `DEFAULT 'NULL'`
+      // unquoted ("NULL"), and nulling that would drop a real string default. The
+      // SHOW-FULL-FIELDS sibling path (newColumnFromField) reaches the same def=null,
+      // defaultFunction=null result, since the driver yields a real null for that field —
+      // matching Rails' net result for a plain nullable column.
+      if (this.isMariadb() && def === "NULL") def = null;
       const onUpdateMatch = extraRaw.match(/on update (.+)$/i);
       if (
         semanticType === "datetime" &&

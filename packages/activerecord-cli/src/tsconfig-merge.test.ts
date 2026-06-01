@@ -59,23 +59,23 @@ describe("mergeTsconfig", () => {
       JSON.stringify({ compilerOptions: {}, include: ["./**/*.ts"] }, null, 2) + "\n";
     const result = mergeTsconfig(existing);
     const cfg = JSON.parse(result.content) as { include: string[] };
-    expect(cfg.include).toContain("models/**/*.ts");
+    expect(cfg.include).toContain("app/models/**/*.ts");
     expect(cfg.include).toContain("db/migrate/**/*.ts");
     expect(cfg.include).toContain("./**/*.ts");
-    expect(result.includesAppended).toContain("models/**/*.ts");
+    expect(result.includesAppended).toContain("app/models/**/*.ts");
     expect(result.includesAppended).toContain("db/migrate/**/*.ts");
   });
 
   it("does not duplicate include globs already present", () => {
     const existing =
       JSON.stringify(
-        { compilerOptions: {}, include: ["models/**/*.ts", "db/migrate/**/*.ts"] },
+        { compilerOptions: {}, include: ["app/models/**/*.ts", "db/migrate/**/*.ts"] },
         null,
         2,
       ) + "\n";
     const result = mergeTsconfig(existing);
     const cfg = JSON.parse(result.content) as { include: string[] };
-    expect(cfg.include.filter((g) => g === "models/**/*.ts")).toHaveLength(1);
+    expect(cfg.include.filter((g) => g === "app/models/**/*.ts")).toHaveLength(1);
     expect(result.includesAppended).toEqual([]);
   });
 
@@ -85,7 +85,9 @@ describe("mergeTsconfig", () => {
     const cfg = JSON.parse(result.content) as {
       compilerOptions: { plugins?: { name: string }[] };
     };
-    expect(cfg.compilerOptions.plugins).toContainEqual({ name: "@blazetrails/trails-tsc" });
+    expect(cfg.compilerOptions.plugins).toContainEqual({
+      name: "@blazetrails/trails-tsc/ts-plugin",
+    });
     expect(result.pluginAdded).toBe(true);
   });
 
@@ -96,7 +98,9 @@ describe("mergeTsconfig", () => {
     const cfg = JSON.parse(result.content) as {
       compilerOptions: { plugins?: { name: string }[] };
     };
-    expect(cfg.compilerOptions.plugins).toContainEqual({ name: "@blazetrails/trails-tsc" });
+    expect(cfg.compilerOptions.plugins).toContainEqual({
+      name: "@blazetrails/trails-tsc/ts-plugin",
+    });
     expect(cfg.compilerOptions.plugins).toContainEqual({ name: "other-plugin" });
     expect(result.pluginAdded).toBe(true);
   });
@@ -104,7 +108,7 @@ describe("mergeTsconfig", () => {
   it("does not duplicate trails-tsc plugin when already present", () => {
     const existing =
       JSON.stringify(
-        { compilerOptions: { plugins: [{ name: "@blazetrails/trails-tsc" }] } },
+        { compilerOptions: { plugins: [{ name: "@blazetrails/trails-tsc/ts-plugin" }] } },
         null,
         2,
       ) + "\n";
@@ -113,7 +117,7 @@ describe("mergeTsconfig", () => {
       compilerOptions: { plugins?: { name: string }[] };
     };
     const count = (cfg.compilerOptions.plugins ?? []).filter(
-      (p) => p.name === "@blazetrails/trails-tsc",
+      (p) => p.name === "@blazetrails/trails-tsc/ts-plugin",
     ).length;
     expect(count).toBe(1);
     expect(result.pluginAdded).toBe(false);
@@ -185,9 +189,40 @@ describe("ar init tsconfig integration", () => {
     await init(root);
     const raw = await readFile(join(root, "tsconfig.json"), "utf8");
     const cfg = JSON.parse(raw) as { include: string[] };
-    expect(cfg.include).toContain("models/**/*.ts");
+    expect(cfg.include).toContain("app/models/**/*.ts");
     expect(cfg.include).toContain("db/migrate/**/*.ts");
     expect(cfg.include).toContain("src/**/*.ts");
+  });
+
+  it("does not rewrite an already-compliant tsconfig (preserves mtime)", async () => {
+    const compliant =
+      JSON.stringify(
+        {
+          compilerOptions: {
+            target: "ES2022",
+            module: "Node16",
+            moduleResolution: "Node16",
+            strict: true,
+            esModuleInterop: true,
+            skipLibCheck: true,
+            plugins: [{ name: "@blazetrails/trails-tsc/ts-plugin" }],
+          },
+          include: ["app/models/**/*.ts", "db/migrate/**/*.ts"],
+        },
+        null,
+        2,
+      ) + "\n";
+    await writeFile(join(root, "tsconfig.json"), compliant, "utf8");
+    const { mtimeMs: before } = await import("fs/promises").then((fs) =>
+      fs.stat(join(root, "tsconfig.json")),
+    );
+
+    await init(root);
+
+    const { mtimeMs: after } = await import("fs/promises").then((fs) =>
+      fs.stat(join(root, "tsconfig.json")),
+    );
+    expect(after).toBe(before);
   });
 
   it("overwrites tsconfig wholesale when --force is set", async () => {

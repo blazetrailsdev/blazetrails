@@ -11,10 +11,10 @@ const AR_REQUIRED_OPTIONS: ReadonlyArray<readonly [string, unknown]> = [
 ];
 
 /** Include globs AR needs present (for models and migrations). */
-const AR_REQUIRED_INCLUDES = ["models/**/*.ts", "db/migrate/**/*.ts"] as const;
+const AR_REQUIRED_INCLUDES = ["app/models/**/*.ts", "db/migrate/**/*.ts"] as const;
 
-/** The trails-tsc language service plugin name. */
-const TRAILS_TSC_PLUGIN = "@blazetrails/trails-tsc";
+/** The trails-tsc language service plugin subpath (exposes the TS language service plugin). */
+const TRAILS_TSC_PLUGIN = "@blazetrails/trails-tsc/ts-plugin";
 
 /** Fresh tsconfig scaffold written when no existing file is found. */
 export const FRESH_TSCONFIG =
@@ -55,6 +55,8 @@ export interface TsconfigMergeResult {
   pluginAdded: boolean;
   /** Include globs appended to `include`. */
   includesAppended: string[];
+  /** True when any modification was made (false = file is already compliant). */
+  changed: boolean;
 }
 
 /** Parse JSONC text (comments + trailing commas) using TypeScript's parser. */
@@ -120,6 +122,7 @@ export function mergeTsconfig(existingText: string): TsconfigMergeResult {
     }
   }
 
-  const content = JSON.stringify(cfg, null, 2) + "\n";
-  return { content, added, conflicts, pluginAdded, includesAppended };
+  const changed = added.length > 0 || pluginAdded || includesAppended.length > 0;
+  const content = changed ? JSON.stringify(cfg, null, 2) + "\n" : existingText;
+  return { content, added, conflicts, pluginAdded, includesAppended, changed };
 }

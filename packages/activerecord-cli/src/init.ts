@@ -258,7 +258,9 @@ export async function init(root: string, opts: InitOptions = {}): Promise<InitRe
     if (tsconfigExists && !force) {
       const existing = await readFile(tsconfigPath, "utf8");
       tsconfigMerged = mergeTsconfig(existing);
-      await writeFile(tsconfigPath, tsconfigMerged.content, "utf8");
+      if (tsconfigMerged.changed) {
+        await writeFile(tsconfigPath, tsconfigMerged.content, "utf8");
+      }
     } else {
       try {
         await writeFile(tsconfigPath, FRESH_TSCONFIG, { flag: force ? "w" : "wx" });

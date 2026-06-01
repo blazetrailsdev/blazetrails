@@ -70,18 +70,38 @@ Column-line forms the parser must handle (all emitted by `SchemaDumper`):
 - Nullability: a column is **nullable unless** `null: false` is present
   (`schema-dumper.ts:946` only emits `null: false`). This matches the JSON
   dumper's `null: true`-when-no-NOT-NULL semantics.
-- Arrays: `{ array: true }` in the colspec; the element's Rails type is
-  `dslType`. Maps to `DumpColumnSchema.arrayElementType`.
-- `t.enum("col", { enum_type: "...", ... })` — PG enums. Treat as `string`
-  for TS purposes (parity with today's resolution).
+- Arrays: `{ array: true }` in the colspec. The parser must emit
+  `{ type: "array", arrayElementType: dslType }` — **not** `type: dslType`.
+  `synthesize.ts:122` only renders `ElementTsType[]` when `type === "array"`
+  _and_ `arrayElementType` is set; emitting `type: "string"` with an
+  `arrayElementType` would drop the `[]` and render a bare `string`. This
+  matches the JSON dumper, which records `type: "array"` + `arrayElementType`.
+- `t.enum("col", { enum_type: "...", ... })` — PG enums. Emit Rails type
+  `"enum"` (or pass the dslType through verbatim). It is **not** in
+  `ATTRIBUTE_TYPE_MAP`, so `tsTypeFor` resolves it to `unknown` — which is
+  exactly what the JSON dumper produces today (the introspected enum UDT name
+  is also unmapped → `unknown`). Parity holds; do **not** special-case it to
+  `string` (that would change behavior). Mapping enums to a string-literal
+  union is a separate future enhancement, out of scope here.
 - `t.column("col", "<sqlType>", { ... })` — generic fallback for exotic SQL
   types. We only have the raw SQL type string here, so resolution may degrade
   to `unknown` (see Known limitations).
-- The implicit primary-key column. `createTable`'s options object carries the
-  PK (`id`, `primaryKey`, composite `primaryKey: [...]`, or `id: false`).
-  `schema-columns.json` includes `id` because it introspects every DB column,
-  so the parser **must synthesize** the PK column(s) from `createTable`
-  options to keep parity. This is the subtlest part of the port.
+- The implicit primary-key column — **the subtlest part of the port.**
+  `schema-columns.json` includes `id` because it introspects every DB column;
+  `schema.ts` does **not** emit a `t.*` line for the default PK. Per
+  `schema-dumper.ts` `emitTable` (≈L913-927), the encoding is:
+  - **Default `id`** (name `"id"`, integer/bigint): emits **no** `id` key in
+    `createTable` options _and_ no body line. The parser must **synthesize**
+    an `id` column, `null: false`, with the assumed default PK type. ⚠️ See
+    the parity risk below — schema.ts can't distinguish `bigint` from
+    `integer` here.
+  - **`id: "uuid"`**: the only typed PK case (`primaryKeyTableOptions`).
+    Synthesize `id` as `uuid`.
+  - **`id: false`** (non-default single PK that isn't named `id`, or an
+    explicitly keyless table): synthesize nothing.
+  - **Composite PK**: options carry `primaryKey: [...]` **and** `id: false`.
+    The PK columns are emitted as ordinary `t.*` body lines, so they're
+    already captured — the parser must just **not** synthesize an `id`.
 
 ## Design
 
@@ -95,15 +115,20 @@ importing/evaluating `schema.ts` (which would pull in `@blazetrails/activerecord
 and want a connection). Walk the `defineSchema` body:
 
 1. Find each `ctx.createTable(<nameLiteral>, <optionsObj?>, <arrow>)` call.
-2. From `<optionsObj>`, synthesize the PK column(s) unless `id: false`.
+2. From `<optionsObj>`, synthesize the implicit `id` column: skip when
+   `id === false` or a composite `primaryKey` array is present; emit `uuid`
+   when `id === "uuid"`; otherwise emit the default PK type. (Composite PK
+   columns appear as ordinary body lines — step 3 captures them.)
 3. Walk `<arrow>`'s body statements: each `t.<method>(<nameLiteral>, <optsObj?>)`
-   call → one column. Map `<method>` → Rails type; read `null`/`array` from
-   `<optsObj>`; for `t.column`, read the 2nd arg SQL-type literal.
+   call → one column. Map `<method>` → Rails type; a column is nullable unless
+   `null: false`; `array: true` → `{ type: "array", arrayElementType: method }`;
+   for `t.column`, read the 2nd-arg SQL-type literal.
 4. Emit `{ table: { col: { type, null, arrayElementType? } } }`.
 
-The Rails-type → TS-type mapping already lives in `virtualize.ts` and is
-unchanged — the parser emits Rails type _strings_, exactly like the JSON
-dumper does today.
+The Rails-type → TS-type mapping already lives in
+`type-virtualization/type-registry.ts` (`ATTRIBUTE_TYPE_MAP` / `tsTypeFor`,
+consumed by `synthesize.ts`) and is unchanged — the parser emits Rails type
+_strings_, exactly like the JSON dumper does today.
 
 **`--schema` dispatch.** Detect by extension: `.ts`/`.js` → AST parser; `.json`
 → existing `JSON.parse` path. Keep the JSON branch through one release as a
@@ -168,9 +193,17 @@ Gated on A–C merged so nothing is left pointing at the removed bin.
   SQL type string. Parser should map the well-known ones and fall back to
   `unknown` (current behavior for unrecognized types). Confirm no canonical
   fixture regresses in the parity suite.
-- **PK parity.** Verify the synthesized `id` column's type/nullability matches
-  what `schema-columns.json` previously emitted for the same DB (bigint vs
-  integer per adapter; `id: false` tables get no synthesized column).
+- **PK parity (integer vs bigint).** `schema-columns.json` recorded the `id`
+  column's _introspected_ type. But `SchemaDumper.primaryKeyTableOptions` only
+  special-cases `uuid` — a non-default **integer** PK emits no distinguishing
+  option, so `schema.ts` is itself lossy: the parser cannot tell `integer`
+  from `bigint` and must assume the Rails default (`bigint` → `tsTypeFor`
+  `"bigint"`). For a project with `id: :integer` PKs, the synthesized type
+  would be `bigint` where the JSON gave `number` — a real (small) parity
+  delta. Two options: (a) accept it (both are numeric, IDE impact minimal), or
+  (b) first close the gap in `SchemaDumper` so it emits `id: "integer"` for
+  non-bigint integer PKs (a separate AR-side fidelity fix, arguably correct
+  vs Rails anyway). Decide before PR A; capture a fixture either way.
 - **`t.timestamps()`** — `SchemaDumper` does _not_ emit `t.timestamps()` (the
   string never appears in `schema-dumper.ts`); it expands to explicit
   `t.datetime("created_at", …)` / `t.datetime("updated_at", …)` lines, which

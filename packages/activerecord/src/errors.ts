@@ -167,9 +167,9 @@ export class RecordNotFound extends ActiveRecordError {
 }
 
 export class RecordNotSaved extends ActiveRecordError {
-  readonly record: any;
+  readonly record?: object;
 
-  constructor(message?: string, record?: any) {
+  constructor(message?: string, record?: object) {
     super(message);
     this.name = "RecordNotSaved";
     this.record = record;
@@ -177,9 +177,9 @@ export class RecordNotSaved extends ActiveRecordError {
 }
 
 export class RecordNotDestroyed extends ActiveRecordError {
-  readonly record: any;
+  readonly record?: object;
 
-  constructor(message?: string, record?: any) {
+  constructor(message?: string, record?: object) {
     super(message);
     this.name = "RecordNotDestroyed";
     this.record = record;
@@ -193,9 +193,9 @@ export class RecordNotDestroyed extends ActiveRecordError {
 export type { RecordInvalid } from "./validations.js";
 
 export class SoleRecordExceeded extends ActiveRecordError {
-  readonly model?: any;
+  readonly model?: { name?: string };
 
-  constructor(model?: any) {
+  constructor(model?: { name?: string }) {
     super(`Wanted only one ${model?.name ?? "record"}`);
     this.name = "SoleRecordExceeded";
     this.model = model;
@@ -556,10 +556,10 @@ export class DatabaseAlreadyExists extends StatementInvalid {
 }
 
 export class StaleObjectError extends ActiveRecordError {
-  readonly record?: any;
+  readonly record?: object;
   readonly attemptedAction?: string;
 
-  constructor(record?: any, attemptedAction?: string) {
+  constructor(record?: object, attemptedAction?: string) {
     if (record && attemptedAction) {
       const model = record?.constructor?.name ?? "Record";
       super(`Attempted to ${attemptedAction} a stale object: ${model}.`);
@@ -641,10 +641,10 @@ export class IrreversibleOrderError extends ActiveRecordError {
 }
 
 export class UnknownAttributeError extends ActiveRecordError {
-  readonly record: any;
+  readonly record: object;
   readonly attribute: string;
 
-  constructor(record: any, attribute: string) {
+  constructor(record: object, attribute: string) {
     const model = record?.constructor?.name ?? "Record";
     super(`unknown attribute '${attribute}' for ${model}.`);
     this.name = "UnknownAttributeError";

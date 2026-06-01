@@ -186,4 +186,7 @@ async function main() {
   console.log(`Wrote ${OUT_FILE}: ${entries} files, ${tests} fixture-using tests`);
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

@@ -51,6 +51,7 @@ describe("AssociationsExtensionsTest", () => {
       theAssociation: () => { owner: Base; reflection: { name: string } };
     };
     expect(scoped.theAssociation().owner).toBe(post);
+    expect(scoped.theAssociation().reflection.name).toBe("comments");
   });
 
   it("extension with dirty target", async () => {

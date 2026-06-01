@@ -47,6 +47,11 @@ Associations.belongsTo.call(Group, "select");
 Associations.hasOne.call(Group, "values");
 Associations.hasMany.call(Select, "groups");
 Associations.hasAndBelongsToMany.call(Distinct, "selects");
+// Rails' Distinct also declares `has_many :values, through: :groups`. It's
+// dangling even in Rails — Distinct has no `:groups` association and no test
+// exercises it. trails resolves `through:` lazily (verified: no throw at
+// declare time), so we mirror it verbatim for class-body parity.
+Associations.hasMany.call(Distinct, "values", { through: "groups" });
 
 setupHandlerSuite();
 
@@ -181,7 +186,7 @@ describe("ReservedWordTest", () => {
     const s = await Select.find(2);
     const gs = await (s as unknown as { groups: { toArray(): Promise<Group[]> } }).groups.toArray();
     expect(gs.length).toBe(2);
-    expect(gs.map((g) => g.id).sort()).toEqual([2, 3]);
+    expect(gs.map((g) => g.id).sort((a, b) => Number(a) - Number(b))).toEqual([2, 3]);
   });
 
   it("has and belongs to many", async () => {
@@ -191,7 +196,7 @@ describe("ReservedWordTest", () => {
       d as unknown as { selects: { toArray(): Promise<Select[]> } }
     ).selects.toArray();
     expect(selects.length).toBe(2);
-    expect(selects.map((s) => s.id).sort()).toEqual([1, 2]);
+    expect(selects.map((s) => s.id).sort((a, b) => Number(a) - Number(b))).toEqual([1, 2]);
   });
 
   it("activerecord introspection", async () => {
@@ -214,6 +219,10 @@ describe("ReservedWordTest", () => {
     await createTestFixtures("select", "group");
     const selects = await Select.all().includes("groups").toArray();
     for (const s of selects) {
+      // UNSKIP REQUIRES: wrap this loop in the (not-yet-available)
+      // `assert_no_queries` helper — Rails asserts the eager-loaded `groups`
+      // trigger zero queries here. Without it this test has no assertion and
+      // would pass vacuously, so do not unskip until the harness exists.
       await (s as unknown as { groups: { toArray(): Promise<Group[]> } }).groups.toArray();
     }
   });

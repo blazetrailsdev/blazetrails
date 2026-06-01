@@ -906,9 +906,7 @@
     "toggle attribute",
     "using table name qualified column names unless having select list explicitly"
   ],
-  "batches.test.ts": [
-    "find in batches should ignore the order default scope"
-  ],
+  "batches.test.ts": ["find in batches should ignore the order default scope"],
   "calculations.test.ts": [
     "count for a composite primary key model",
     "group by count for a composite primary key model",
@@ -1150,21 +1148,11 @@
     "uses set fixture class",
     "yml file in subdirectory"
   ],
-  "inheritance.test.ts": [
-    "a bad type column"
-  ],
-  "insert-all.test.ts": [
-    "upsert all updates using provided sql and unique by"
-  ],
-  "integration.test.ts": [
-    "cache key changes when child touched"
-  ],
-  "locking.test.ts": [
-    "quote table name reserved word references"
-  ],
-  "nested-attributes.test.ts": [
-    "attr accessor of child should be value provided during update"
-  ],
+  "inheritance.test.ts": ["a bad type column"],
+  "insert-all.test.ts": ["upsert all updates using provided sql and unique by"],
+  "integration.test.ts": ["cache key changes when child touched"],
+  "locking.test.ts": ["quote table name reserved word references"],
+  "nested-attributes.test.ts": ["attr accessor of child should be value provided during update"],
   "persistence.test.ts": [
     "becomes",
     "becomes after reload schema from cache",
@@ -1214,9 +1202,7 @@
     "has many with through is not implicitly marked readonly while finding first",
     "has many with through is not implicitly marked readonly while finding last"
   ],
-  "relation/and.test.ts": [
-    "and"
-  ],
+  "relation/and.test.ts": ["and"],
   "relation/delete-all.test.ts": [
     "delete all composite model with join subquery",
     "delete all loaded",
@@ -1409,17 +1395,13 @@
     "should maintain default scope on eager loaded associations",
     "update all default scope filters on joins"
   ],
-  "serialization.test.ts": [
-    "read attribute for serialization with format after find"
-  ],
+  "serialization.test.ts": ["read attribute for serialization with format after find"],
   "serialized-attribute.test.ts": [
     "json read db null",
     "json read legacy null",
     "serialized json attribute returns unserialized value"
   ],
-  "strict-loading.test.ts": [
-    "strict loading violations are ignored on fixtures"
-  ],
+  "strict-loading.test.ts": ["strict loading violations are ignored on fixtures"],
   "touch-later.test.ts": [
     "touching three deep",
     "touching through nested attributes with before committed on all records",
@@ -1450,7 +1432,5 @@
     "rollback dirty changes then retry save",
     "transaction does not apply default scope"
   ],
-  "view.test.ts": [
-    "reading"
-  ]
+  "view.test.ts": ["reading"]
 }

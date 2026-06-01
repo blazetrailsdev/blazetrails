@@ -17,12 +17,13 @@ after the initial dump.
 
 ## Why
 
-`trails-models-dump` today opens a live database connection, runs four
-parallel introspection queries per table, and builds `IntrospectedTable[]`
-from the results. That works, but it creates a non-trivial operational
-coupling: every `ar models:dump` invocation requires a reachable DB with
-correct credentials. In CI, in offline dev, and on a new machine clone,
-that means extra setup before codegen can run.
+`trails-models-dump` today opens a live database connection, calls
+`introspectTables` once, then runs three parallel queries per table
+(`introspectPrimaryKey`, `introspectColumns`, `introspectForeignKeys`), and
+builds `IntrospectedTable[]` from the results. That works, but it creates a
+non-trivial operational coupling: every `ar models:dump` invocation requires
+a reachable DB with correct credentials. In CI, in offline dev, and on a
+new machine clone, that means extra setup before codegen can run.
 
 The Rails analogy is instructive: Rails' `rails generate model` derives
 attribute hints from `db/schema.rb` — the _committed_ schema snapshot — not
@@ -128,15 +129,16 @@ Add a second public function to the existing
 the existing `parseSchemaTs`:
 
 ```ts
-export interface SchemaModelTable {
-  name: string;
-  primaryKey: string | string[] | null;
-  foreignKeys: ForeignKeyDefinition[];
-  columns: { name: string; type: string }[];
-}
-
-export function parseSchemaForModels(source: string, filePath: string): SchemaModelTable[];
+// Re-uses the IntrospectedTable type from @blazetrails/activerecord
+// (already a dep of activerecord-cli) so no new interface is needed.
+export function parseSchemaForModels(source: string, filePath: string): IntrospectedTable[];
 ```
+
+Returning `IntrospectedTable[]` directly — rather than defining a parallel
+`SchemaModelTable` interface — keeps the type at the call site trivial: the
+result slots straight into `generateModels` without a mapping step, and no
+new exported shape needs stabilising. `activerecord-cli` already imports
+`IntrospectedTable` for the live-DB path, so there is no new dependency.
 
 Keeping it in the same file reuses all the existing AST-walk helpers
 (`strLiteral`, `objPropValue`, `parseCreateTable`, `walkBody`, etc.) and
@@ -149,6 +151,9 @@ avoids a second parse of the same source file.
      `primaryKey` option instead of discarding it.
    - Map the synthesized PK into `primaryKey: string | string[] | null`
      (column name, not type).
+   - Map columns to `{ name: string; type: string }[]` (the `IntrospectedTable`
+     shape), discarding the `null`/`arrayElementType` fields that `generateModels`
+     does not consume.
 
 2. Add a new top-level visitor for `addForeignKey(fromTable, toTable, opts)`:
    - Extract string literals for `fromTable`, `toTable`.
@@ -158,10 +163,14 @@ avoids a second parse of the same source file.
    - Default `primaryKey` to `"id"` when absent.
    - Synthesize a constraint name when `name` is absent
      (`fk_rails_${fromTable}_${column}` is sufficient for codegen).
-   - Construct a plain-object conforming to `ForeignKeyDefinition`'s shape
-     and attach it to the relevant `fromTable` entry.
+   - Construct a `new ForeignKeyDefinition(fromTable, toTable, column,
+primaryKey, name, onDelete, onUpdate, deferrable, validate)` — use the
+     real class so the result is assignable to `ForeignKeyDefinition[]` without
+     casting. (`ForeignKeyDefinition` is a class with instance methods;
+     plain objects do not satisfy the type.)
+   - Attach the `ForeignKeyDefinition` to the relevant `fromTable` entry.
 
-3. Return `SchemaModelTable[]` with one entry per `createTable` call,
+3. Return `IntrospectedTable[]` with one entry per `createTable` call,
    annotated with the `addForeignKey` entries collected in step 2.
 
 **`--schema` dispatch in `trails-models-dump`:**
@@ -183,12 +192,12 @@ Per repo convention these are **non-overlapping sibling PRs**, not a stack.
 
 ### PR α — Extend `schema-ts-parser.ts` with `parseSchemaForModels` (~150 LOC)
 
-- New `SchemaModelTable` interface (5 lines).
 - Extend `synthesizePk`-family logic to capture composite PK column names
   from the `primaryKey: [...]` option literal array (~20 lines).
 - New `visitAddForeignKey` visitor that walks top-level `addForeignKey`
-  calls and builds FK records (~50 lines).
-- New exported `parseSchemaForModels` function (~25 lines).
+  calls and constructs `ForeignKeyDefinition` instances (~55 lines).
+- New exported `parseSchemaForModels` function returning `IntrospectedTable[]`
+  (~25 lines).
 - Unit tests: composite PKs, FKs with and without explicit options,
   FK column default inference, tables with `id: false`, multiple tables
   with cross-table FKs (~60 lines).
@@ -203,8 +212,11 @@ Dependency: PR A (#2761) merged (parser infrastructure lives there).
   (~20 lines).
 - Update `usage()` string (~5 lines).
 - New branch in `run()`: when `--schema` given, read file via `getFsAsync` +
-  `parseSchemaForModels` → `IntrospectedTable[]` → `generateModels` (~50
-  lines). No `Base.establishConnection()`.
+  `parseSchemaForModels` → `IntrospectedTable[]` → apply existing
+  `BUILTIN_IGNORE` / `--only` / `--ignore` filtering → `generateModels`
+  (~50 lines). No `Base.establishConnection()`. The `--only`/`--ignore`/
+  `--strip-prefix`/`--strip-suffix`/`--no-header`/`--format` flags all
+  apply identically to both paths.
 - Integration test: write a minimal inline `schema.ts` with two tables and
   one FK to a tmpfile, run `trails-models-dump --schema <tmpfile>`, assert
   generated classes + `belongsTo`/`hasMany` are correct (~55 lines).
@@ -247,21 +259,22 @@ Dependency: PR γ merged.
 
 ## Parser-shape gaps (summary)
 
-| Gap                                 | How addressed                                                                                  |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Composite PK column names           | Capture `primaryKey: [...]` literal array from `createTable` options in `parseSchemaForModels` |
-| FK list per table                   | New `visitAddForeignKey` pass over top-level `addForeignKey` calls                             |
-| FK `column` default                 | Infer `${singularize(toTable)}_id` when option is absent                                       |
-| FK constraint `name` default        | Synthesize `fk_rails_${fromTable}_${col}` when absent                                          |
-| `ForeignKeyDefinition` construction | Build plain objects matching the interface; no need to import the live-DB class                |
+| Gap                          | How addressed                                                                                       |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| Composite PK column names    | Capture `primaryKey: [...]` literal array from `createTable` options in `parseSchemaForModels`      |
+| FK list per table            | New `visitAddForeignKey` pass over top-level `addForeignKey` calls                                  |
+| FK `column` default          | Infer `${singularize(toTable)}_id` when option absent                                               |
+| FK constraint `name` default | Synthesize `fk_rails_${fromTable}_${col}` when absent                                               |
+| `ForeignKeyDefinition` type  | Construct `new ForeignKeyDefinition(...)` instances — class methods required for type assignability |
+| Return type                  | Reuse `IntrospectedTable` from `@blazetrails/activerecord`; no new exported interface               |
 
 ## Risks / open questions
 
-- **`t.references` not emitted by `SchemaDumper`.**
-  The schema dumper expands `t.references(...)` to an explicit column line
-  plus a separate `addForeignKey` call. The parser does not need to handle
-  `t.references`. Verify against the dumper's `emitTable` path if new
-  adapter-specific variants appear.
+- **`t.references` never appears in `schema.ts`.**
+  `SchemaDumper.emitTable` emits explicit column lines (`t.integer(...)`)
+  plus separate top-level `addForeignKey` calls — `t.references` is never
+  written to the output file. The parser needs no `t.references` handler.
+  (Confirmed: no `references` call appears in `schema-dumper.ts`.)
 
 - **FK `column` absent in schema.ts.** The dumper conditionally omits the
   `column:` option (`if (fk.column) opts.push(...)` at schema-dumper.ts:1109).
@@ -293,12 +306,14 @@ Dependency: PR γ merged.
   be treated identically — pass `type: "enum"` through. Codegen doesn't use
   column types. No special-casing needed.
 
-- **`ForeignKeyDefinition` class vs. plain object.** The live-DB path
-  constructs real `ForeignKeyDefinition` instances (which carry instance
-  methods like `isCustomPrimaryKey`). The new parser can emit plain objects
-  that satisfy the interface shape — `generateModels` only reads `column`,
-  `toTable`, `name`, and checks `fk.column.includes(",")`, none of which
-  require instance methods.
+- **`ForeignKeyDefinition` is a class, not an interface.** It carries instance
+  methods (`isCustomPrimaryKey`, `isExportNameOnSchemaDump`, etc.). Plain
+  object literals are NOT structurally assignable to `ForeignKeyDefinition[]`
+  in TypeScript. The parser must construct real instances via
+  `new ForeignKeyDefinition(...)`. This is straightforward — the constructor
+  takes positional args that map directly to the parsed options. The class is
+  already imported in `activerecord-cli` (via the live-DB path's
+  `introspectForeignKeys` return type).
 
 ## Non-goals
 
@@ -317,8 +332,9 @@ Dependency: PR γ merged.
 
 - `ar models:dump --schema db/schema.ts` emits the same class/association
   structure as `ar models:dump --database-url <url>` against the same
-  underlying schema (verified against the twitter-clone example and any
-  parity fixtures added in PR α).
+  underlying schema. Verified by the PR β integration test: a schema.ts
+  fixture with two tables and one FK produces the same output as running
+  the live-DB path against a SQLite database built from the same DDL.
 - No `Base.establishConnection()` is called when `--schema` is the active
   path — confirmed by running `trails-models-dump --schema db/schema.ts`
   with `DATABASE_URL` unset and no DB running.

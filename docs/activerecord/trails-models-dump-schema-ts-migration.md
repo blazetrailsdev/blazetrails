@@ -124,9 +124,8 @@ without touching a database.
 
 ## Design
 
-Add a second public function to the existing
-`packages/activerecord-cli/src/tsc-wrapper/schema-ts-parser.ts` alongside
-the existing `parseSchemaTs`:
+Add a new function in a **sibling file** —
+`packages/activerecord-cli/src/tsc-wrapper/schema-ts-model-parser.ts`:
 
 ```ts
 // Re-uses the IntrospectedTable type from @blazetrails/activerecord
@@ -137,12 +136,23 @@ export function parseSchemaForModels(source: string, filePath: string): Introspe
 Returning `IntrospectedTable[]` directly — rather than defining a parallel
 `SchemaModelTable` interface — keeps the type at the call site trivial: the
 result slots straight into `generateModels` without a mapping step, and no
-new exported shape needs stabilising. `activerecord-cli` already imports
-`IntrospectedTable` for the live-DB path, so there is no new dependency.
+new exported shape needs stabilising. `activerecord-cli` already imports the
+`IntrospectedTable` _type_ for the live-DB path.
 
-Keeping it in the same file reuses all the existing AST-walk helpers
-(`strLiteral`, `objPropValue`, `parseCreateTable`, `walkBody`, etc.) and
-avoids a second parse of the same source file.
+**Why a sibling file, not the same file.** It is tempting to drop
+`parseSchemaForModels` into the existing `schema-ts-parser.ts` to reuse its
+AST helpers (`strLiteral`, `objPropValue`, `parseCreateTable`, `walkBody`).
+But that file is re-exported through `tsc-wrapper/index.ts` — the barrel the
+**`trails-tsc` typecheck path** consumes (`parseSchemaTs`). `parseSchemaForModels`
+needs a **value import** of the `ForeignKeyDefinition` class (see step 2), and
+a top-level value import of `@blazetrails/activerecord` in `schema-ts-parser.ts`
+would make every `trails-tsc` invocation eagerly load the entire AR runtime
+module. The companion plan's whole point is that `trails-tsc` parses
+`schema.ts` _statically_ and never imports AR. To preserve that, PR 1
+**exports the four AST helpers** from `schema-ts-parser.ts` (they stay pure —
+no AR import) and the new sibling file imports both the helpers and
+`ForeignKeyDefinition`. The AR-runtime coupling is then confined to the
+`trails-models-dump` path, which already depends on AR anyway.
 
 **`parseSchemaForModels` internals:**
 
@@ -164,10 +174,12 @@ avoids a second parse of the same source file.
    - Synthesize a constraint name when `name` is absent
      (`fk_rails_${fromTable}_${column}` is sufficient for codegen).
    - Construct `new ForeignKeyDefinition(fromTable, toTable, column, primaryKey,
-name, onDelete, onUpdate, deferrable, validate)` — use the real class so
-     the result is assignable to `ForeignKeyDefinition[]` without casting.
-     (`ForeignKeyDefinition` is a class with instance methods; plain objects
-     do not satisfy the type.)
+name, onDelete, onUpdate, deferrable, validate)` — the constructor's
+     positional parameter order, verified against
+     `connection-adapters/abstract/schema-definitions.ts`. Use the real class
+     (value-imported from `@blazetrails/activerecord`) so the result is
+     assignable to `ForeignKeyDefinition[]` without casting; plain object
+     literals are not structurally assignable to a class type.
    - Attach the `ForeignKeyDefinition` to the relevant `fromTable` entry.
 
 3. Return `IntrospectedTable[]` with one entry per `createTable` call,
@@ -177,8 +189,8 @@ name, onDelete, onUpdate, deferrable, validate)` — use the real class so
 
 Add a `--schema <path>` flag. When present:
 
-- Read the file, call `parseSchemaForModels`, map to `IntrospectedTable[]`,
-  pass to `generateModels`.
+- Read the file, call `parseSchemaForModels` (returns `IntrospectedTable[]`),
+  pass straight to `generateModels` — no mapping step.
 - No `Base.establishConnection()`. No DB URL required.
 - `sourceHint` is the resolved path to `schema.ts`.
 
@@ -190,19 +202,24 @@ When neither `--schema` nor a DB URL is available, prefer auto-discovering
 
 Per repo convention these are **non-overlapping sibling PRs**, not a stack.
 
-### PR 1 — Extend `schema-ts-parser.ts` with `parseSchemaForModels` (~150 LOC)
+### PR 1 — New `schema-ts-model-parser.ts` with `parseSchemaForModels` (~160 LOC)
 
-- Extend `synthesizePk`-family logic to capture composite PK column names
-  from the `primaryKey: [...]` option literal array (~20 lines).
-- New `visitAddForeignKey` visitor that walks top-level `addForeignKey`
-  calls and constructs `ForeignKeyDefinition` instances (~55 lines).
-- New exported `parseSchemaForModels` function returning `IntrospectedTable[]`
-  (~25 lines).
+- Export the four reusable AST helpers (`strLiteral`, `objPropValue`,
+  `parseCreateTable`, `walkBody`) from `schema-ts-parser.ts` so the sibling
+  file can import them. These stay pure — **no AR value import added to
+  `schema-ts-parser.ts`** (see "Why a sibling file" above) (~5 lines).
+- New file `schema-ts-model-parser.ts`:
+  - Composite-PK capture: read the `primaryKey: [...]` literal array from
+    `createTable` options (the existing `synthesizePk` returns the sentinel
+    `"composite"` and discards the names — capture them here) (~20 lines).
+  - New `visitAddForeignKey` visitor over top-level `addForeignKey` calls,
+    constructing `ForeignKeyDefinition` instances (~55 lines).
+  - `parseSchemaForModels` assembling `IntrospectedTable[]` (~25 lines).
 - Unit tests: composite PKs, FKs with and without explicit options,
   FK column default inference, tables with `id: false`, multiple tables
   with cross-table FKs (~60 lines).
-- **`parseSchemaTs` and `SchemaColumnsByTable` are untouched** — zero risk
-  to the `trails-tsc` path.
+- **`parseSchemaTs` and `SchemaColumnsByTable` keep their behavior** (only
+  helper visibility changes) — zero behavioral risk to the `trails-tsc` path.
 
 Dependency: PR A (#2761) merged (parser infrastructure lives there).
 
@@ -300,11 +317,12 @@ Dependency: PR 3 merged.
   future STI/polymorphic heuristics), so type fidelity here is a non-issue
   for this migration.
 
-- **PG enum types.** Emitted as `t.enum("col", { enum_type: "..." })`.
-  `parseColumnStatement` already handles `method === "column"` and passes
-  the DSL method through as the type. The enum case (`method === "enum"`) can
-  be treated identically — pass `type: "enum"` through. Codegen doesn't use
-  column types. No special-casing needed.
+- **PG enum types.** Emitted as `t.enum("col", { enum_type: "..." })` (only
+  when the column's OID-resolved type is an enum — `schema-dumper.ts:993`).
+  In `parseColumnStatement` the method name `"enum"` falls through to the
+  generic branch (`schema-ts-parser.ts:138`), which records `{ type: "enum" }`
+  — no special-casing required, and codegen ignores column types anyway. The
+  helper is shared by both parsers, so this behavior is inherited for free.
 
 - **`ForeignKeyDefinition` is a class, not an interface.** It carries instance
   methods (`isCustomPrimaryKey`, `isExportNameOnSchemaDump`, etc.). Plain

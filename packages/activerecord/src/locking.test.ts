@@ -232,13 +232,13 @@ describe("OptimisticLockingTest", () => {
     await p1.touch();
     expect(p1.lock_version).toBe(1);
     expect(p1.changed).toBe(false);
-    expect(Object.keys(p1.savedChanges).sort()).toEqual(expect.arrayContaining(["lock_version"]));
+    expect(Object.keys(p1.savedChanges).sort()).toEqual(["lock_version", "updated_at"]);
   });
 
   it("touch stale object", async () => {
     const person = await Person.create({ first_name: "Mehmet Emin" });
     const stalePerson = await Person.find(person.id);
-    await person.update({ first_name: "Updated" });
+    await person.update({ gender: "M" });
     await expect(stalePerson.touch()).rejects.toThrow(StaleObjectError);
     expect(Object.keys(stalePerson.savedChanges).length).toBe(0);
   });
@@ -477,7 +477,7 @@ describe("OptimisticLockingTest", () => {
         this.attrReadonly("name");
       }
     }
-    expect(ReadonlyNameShip.readonlyAttributes).toContain("name");
+    expect(ReadonlyNameShip.readonlyAttributes).toEqual(["name"]);
     const s = await ReadonlyNameShip.create({ name: "unchangeable name" });
     await s.reload();
     expect(s.name).toBe("unchangeable name");

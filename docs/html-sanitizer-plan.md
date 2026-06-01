@@ -117,7 +117,7 @@ against the Rails source so drift is caught.
 
 ## PR breakdown
 
-Target ~250 LOC each (CLAUDE.md ceiling 300, tests + fixtures count).
+Target ~250 LOC each (CLAUDE.md ceiling 500, tests + fixtures count).
 Each PR ships independently with its own tests; downstream PRs build on
 the previous.
 

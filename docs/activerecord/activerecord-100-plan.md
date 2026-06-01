@@ -28,7 +28,7 @@
 > (Part 2). Residual blocked/done gap items live in
 > [`activerecord-gaps.md`](activerecord-gaps.md).
 
-The api:compare scoreboard is **closed**. Everything below is post-100% Rails-fidelity work — test:compare un-skips driven by audit clusters plus accumulated fidelity polish. PRs target ~250 LOC (CLAUDE.md hard ceiling 300; range 220–280).
+The api:compare scoreboard is **closed**. Everything below is post-100% Rails-fidelity work — test:compare un-skips driven by audit clusters plus accumulated fidelity polish. PRs target ~250 LOC (CLAUDE.md hard ceiling 500; range 220–280).
 
 Closed work lives in `git log` — `git log --grep "audit Slot\|fidelity\|un-skip" origin/main`.
 

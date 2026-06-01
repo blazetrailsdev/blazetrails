@@ -122,15 +122,24 @@ export function isJoinTableEntry(e: FixtureRegistryEntry): e is FixtureJoinTable
  *   `developers` is registerable. The other three HABTM join sets (`categories-posts`,
  *   `parrots-pirates`, `peoples-treasures`) ref only loadable model sets and ARE registered.
  *
- * Subdirectory fixture-set gaps (3 of 4 admin sets registered in Phase 3; remaining phases below):
+ * Subdirectory fixture-set gaps (all top-level + subdir sets fully ported; gaps below are
+ * blocker-categorized):
+ *
+ * **Category A — missing canonical model (model-port work required):**
+ * - `categories-ordered`, `fk-object-to-point-to`, `fk-test-has-fk`, `fk-test-has-pk`,
+ *   `mixins`, `randomly-named-a9`, `virtual-columns`
+ *
+ * **Category B — arunit2 alt-connection (needs alt-connection test infra):**
+ * - `bad-posts`, `other-books`, `other-comments`, `other-posts`, `other-topics`
+ *
+ * **Category C — other blockers:**
  * - `admin/users` — `AdminUser.store("params", { coder: "YAML" })` passes a string
  *   where store() requires an object with `dump()`/`load()`; re-add once the YAML
  *   store coder is implemented.
- * - Phase 2 (`reserved_words/`) — needs model-less loader extension; inline Rails test
- *   classes have no shared model files.
- * - `to_be_linked/` (Phase 4b) — needs model-less loader extension; no shared models.
- * - Phase 5 (`primary_key_error/`),
- *   Phase 6 (`naked/yml/`) — follow-up PRs.
+ * - `developers` — `shared_computers` HABTM non-column ref (listed above).
+ * - `developers-projects` — transitively blocked on `developers` (ref() chain).
+ * - `cpk-reviews` — composite-PK ref() resolution gap (listed above).
+ * - `uuid-children`, `uuid-parents` — tables absent from canonical SQLite TEST_SCHEMA.
  */
 export const fixtureRegistry = {
   "all/namespaced/accounts": {

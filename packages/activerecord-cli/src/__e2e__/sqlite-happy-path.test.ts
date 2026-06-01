@@ -13,7 +13,7 @@ const MIGRATION_BODY = `\
 export default {
   async up() {
     await this.connection.createTable("users", (t) => {
-      t.column("name", "string");
+      t.string("name");
     });
   },
   async down() {

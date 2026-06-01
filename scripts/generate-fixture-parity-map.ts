@@ -3,20 +3,32 @@
  * Generates eslint/test-fixture-parity.json — trails file → fixture-using
  * test descriptions.
  *
- * Detection signals (union):
- *   1. Class-level `fixtures :foo` + per-test body accessor `foo(:record)` →
- *      marks that specific test (precise: skips tests that don't touch fixtures).
- *   2. Class-level `fixtures :foo` with NO body access detected for a test →
- *      marks the test anyway (Rails still loads fixtures for it; it may use
- *      fixtures indirectly via associations or model state).
+ * `fixtures :foo` is a **class-level** declaration in Rails: it only loads
+ * fixtures for tests in that class (and its subclasses). Detection is therefore
+ * scoped per declaring class, never per file — otherwise a `fixtures` line in
+ * one nested class leaks onto every test in the file (see
+ * `tasks/database_tasks_test.rb`, where `fixtures :courses, :colleges` lives in
+ * a single nested class but no test calls a `courses(`/`colleges(` accessor).
+ *
+ * Only tests whose declaring class has fixtures in scope (own + inherited from
+ * an in-file superclass) are candidates. Among those candidates, detection
+ * signals (union) — the same precise-vs-fallback granularity as before, just
+ * restricted to the fixture-scoped set so leakage can't pull in tests from
+ * sibling classes that declare no fixtures:
+ *   1. per-test body accessor `foo(:record)` → marks that specific candidate
+ *      (precise: skips candidates that don't touch fixtures).
+ *   2. NO candidate body-access detected anywhere → marks every candidate
+ *      (Rails still loads fixtures; they may be used indirectly via
+ *      associations or model state).
  *
  * Run: pnpm tsx scripts/generate-fixture-parity-map.ts  (commit the result).
  */
 // fs/path bare per convention; sync fs acceptable in a one-shot CLI generator.
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(__dirname, "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CASES_DIR = path.join(ROOT, "vendor/rails/activerecord/test/cases");
 const OUT_FILE = path.join(ROOT, "eslint/test-fixture-parity.json");
 
@@ -42,10 +54,11 @@ function parseFixtureNames(after: string): string[] {
 interface TestEntry {
   desc: string;
   bodyLines: string[];
+  /** Line index of the `def`/`test ... do` header — used to find the owning class. */
+  lineIdx: number;
 }
 
-function extractTests(src: string): TestEntry[] {
-  const lines = src.split("\n");
+function extractTests(lines: string[]): TestEntry[] {
   const entries: TestEntry[] = [];
 
   const DEF_RE = /^(\s*)def\s+(test_[a-zA-Z0-9_?!]*)/;
@@ -59,16 +72,60 @@ function extractTests(src: string): TestEntry[] {
       entries.push({
         desc: normalize(dm[2].replace(/^test_/, "").replace(/_/g, " ")),
         bodyLines: lines.slice(i + 1, end),
+        lineIdx: i,
       });
       continue;
     }
     const bm = line.match(BLK_RE);
     if (bm) {
       const end = findBodyEnd(lines, i, bm[1].length);
-      entries.push({ desc: normalize(bm[2]), bodyLines: lines.slice(i + 1, end) });
+      entries.push({ desc: normalize(bm[2]), bodyLines: lines.slice(i + 1, end), lineIdx: i });
     }
   }
   return entries;
+}
+
+interface ClassInfo {
+  name: string;
+  superName: string | null;
+  start: number;
+  end: number;
+}
+
+/**
+ * Extract Ruby class declarations with their `[start, end]` line ranges
+ * (the closing `end` matched by indentation). Handles arbitrary nesting:
+ * a class inside a module/class is its own range.
+ */
+function extractClasses(lines: string[]): ClassInfo[] {
+  const CLASS_RE = /^(\s*)class\s+([A-Za-z0-9_:]+)\s*(?:<\s*([A-Za-z0-9_:]+))?/;
+  const out: ClassInfo[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(CLASS_RE);
+    if (!m) continue;
+    out.push({
+      name: m[2],
+      superName: m[3] ?? null,
+      start: i,
+      end: findBodyEnd(lines, i, m[1].length),
+    });
+  }
+  return out;
+}
+
+/** Strip a Ruby namespace qualifier (`ActiveRecord::Foo` → `Foo`). */
+function baseName(name: string): string {
+  const idx = name.lastIndexOf("::");
+  return idx === -1 ? name : name.slice(idx + 2);
+}
+
+/** Innermost class whose body strictly contains `lineIdx`, or null. */
+function ownerClass(classes: ClassInfo[], lineIdx: number): ClassInfo | null {
+  let best: ClassInfo | null = null;
+  for (const c of classes) {
+    if (c.start < lineIdx && lineIdx < c.end && (!best || c.start > best.start)) best = c;
+  }
+  return best;
 }
 
 function findBodyEnd(lines: string[], startIdx: number, indent: number): number {
@@ -93,47 +150,98 @@ function buildAccessorRe(fixtureNames: string[]): RegExp | null {
   return new RegExp(`\\b(${escaped.join("|")})\\s*\\(`);
 }
 
-function collectFixtureNames(src: string): string[] {
+interface FixtureDecl {
+  names: string[];
+  lineIdx: number;
+}
+
+function collectFixtureDecls(lines: string[]): FixtureDecl[] {
   // Multi-line-aware: trailing comma means the list continues on the next line.
-  const lines = src.split("\n");
-  const names: string[] = [];
+  const decls: FixtureDecl[] = [];
   const START_RE = /^\s*fixtures\s+(.+)$/;
   for (let i = 0; i < lines.length; i++) {
     const m = lines[i].match(START_RE);
     if (!m) continue;
+    const lineIdx = i;
     let buf = m[1];
     while (buf.trimEnd().endsWith(",") && i + 1 < lines.length) {
       buf += " " + lines[++i].trim();
     }
-    names.push(...parseFixtureNames(buf));
+    decls.push({ names: parseFixtureNames(buf), lineIdx });
   }
-  return names;
+  return decls;
+}
+
+/**
+ * Pure core: given a Rails test-file source string, return the sorted set of
+ * normalized test descriptions whose Rails counterpart loads fixtures (scoped
+ * per declaring class, never per file). Exported for unit testing.
+ */
+export function mapSource(src: string): string[] {
+  const lines = src.split("\n");
+
+  const decls = collectFixtureDecls(lines);
+  if (decls.length === 0) return [];
+
+  const tests = extractTests(lines);
+  if (tests.length === 0) return [];
+
+  const classes = extractClasses(lines);
+  const byName = new Map<string, ClassInfo>(classes.map((c) => [c.name, c]));
+
+  // Fixtures declared directly inside each class (keyed by ClassInfo identity).
+  const ownFixtures = new Map<ClassInfo, string[]>();
+  for (const d of decls) {
+    const owner = ownerClass(classes, d.lineIdx);
+    if (!owner) continue; // fixtures outside any class — not Rails-valid; ignore.
+    const list = ownFixtures.get(owner) ?? [];
+    list.push(...d.names);
+    ownFixtures.set(owner, list);
+  }
+
+  // A class inherits fixtures from an in-file superclass (Rails subclasses
+  // inherit `fixtures` declarations).
+  function effectiveFixtures(c: ClassInfo, seen = new Set<ClassInfo>()): string[] {
+    if (seen.has(c)) return [];
+    seen.add(c);
+    const own = ownFixtures.get(c) ?? [];
+    const sup = c.superName ? byName.get(baseName(c.superName)) : undefined;
+    return sup ? [...own, ...effectiveFixtures(sup, seen)] : own;
+  }
+
+  // Candidates: tests whose declaring class has fixtures in scope. This alone
+  // fixes the cross-class leak — tests in sibling classes that declare no
+  // fixtures are never marked. Each candidate carries its own class's fixture
+  // names so the accessor check matches the right set.
+  const candidates: { test: TestEntry; accessorRe: RegExp | null }[] = [];
+  for (const t of tests) {
+    const owner = ownerClass(classes, t.lineIdx);
+    if (!owner) continue;
+    const fixtureNames = effectiveFixtures(owner);
+    if (fixtureNames.length === 0) continue;
+    candidates.push({ test: t, accessorRe: buildAccessorRe(fixtureNames) });
+  }
+  if (candidates.length === 0) return [];
+
+  // Precise-vs-fallback among candidates only (preserves the prior file-wide
+  // granularity): if any candidate references its fixtures, mark just those;
+  // otherwise mark every candidate.
+  const withAccess = candidates.filter(
+    (c) => c.accessorRe && c.accessorRe.test(c.test.bodyLines.join("\n")),
+  );
+  const marked = withAccess.length > 0 ? withAccess : candidates;
+  const useDescs = marked.map((c) => c.test.desc);
+
+  return [...new Set(useDescs)].sort();
 }
 
 function processFile(file: string): { trailsRel: string; descs: string[] } | null {
-  const src = fs.readFileSync(file, "utf8");
-
-  const fixtureNames = collectFixtureNames(src);
-  if (fixtureNames.length === 0) return null;
-
-  const tests = extractTests(src);
-  if (tests.length === 0) return null;
-
-  const accessorRe = buildAccessorRe(fixtureNames);
-
-  // Mark tests that access fixtures in their body; fall back to marking all
-  // when no body-access is detected (class-level declaration implies availability).
-  const withAccess = accessorRe ? tests.filter((t) => accessorRe.test(t.bodyLines.join("\n"))) : [];
-
-  // If the file declares fixtures but no test body references them, the whole
-  // file still counts — Rails loads them for every test.
-  const useDescs = withAccess.length > 0 ? withAccess.map((t) => t.desc) : tests.map((t) => t.desc);
-
-  if (useDescs.length === 0) return null;
+  const descs = mapSource(fs.readFileSync(file, "utf8"));
+  if (descs.length === 0) return null;
 
   const relPath = path.relative(CASES_DIR, file).replace(/\\/g, "/");
   const trailsRel = railsToTrailsRel(relPath);
-  return { trailsRel, descs: [...new Set(useDescs)].sort() };
+  return { trailsRel, descs };
 }
 
 function walk(dir: string, acc: string[] = []): string[] {
@@ -168,4 +276,4 @@ function main() {
   console.log(`Wrote ${OUT_FILE}: ${entries} files, ${tests} fixture-using tests`);
 }
 
-main();
+if (import.meta.url === `file://${process.argv[1]}`) main();

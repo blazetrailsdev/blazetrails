@@ -234,6 +234,7 @@ export default defineConfig({
             "scripts/d1-migrate-pg-mysql.test.ts",
             "scripts/test-deps/*.test.ts",
             "scripts/tasks/*.test.ts",
+            "scripts/generate-fixture-parity-map.test.ts",
             "eslint/*.test.mjs",
             "vendor/*.test.ts",
           ],

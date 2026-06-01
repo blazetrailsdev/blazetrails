@@ -481,6 +481,74 @@ describe("trails-tsc — schemaColumnsByTable (Phase R.3)", () => {
     expect(combined).toMatch(/`arrayElementType` is only valid when `type` is "array"/);
   });
 
+  it("loadSchemaColumns: --schema <path>.ts parses TypeScript schema file", async () => {
+    const { loadSchemaColumns } = await import("./cli.js");
+    const schemaSrc = [
+      'schema.createTable("posts", { id: false }, (t) => {',
+      '  t.string("title", { null: false });',
+      '  t.boolean("published");',
+      "});",
+    ].join("\n");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-tsc-ts-"));
+    tmpDirs.push(dir);
+    const tsPath = path.join(dir, "schema.ts");
+    fs.writeFileSync(tsPath, schemaSrc);
+    const result = loadSchemaColumns(["--schema", tsPath]);
+    expect(result).toBeDefined();
+    expect(result!.posts.title).toEqual({ type: "string", null: false });
+    expect(result!.posts.published).toEqual({ type: "boolean", null: true });
+  });
+
+  it(".ts schema drives the same virtualized declares as equivalent .json schema end-to-end", async () => {
+    const { loadSchemaColumns } = await import("./cli.js");
+    // null: false on all columns so the schema fixture consumer.ts type-checks (no | null widening).
+    const schemaSrc = [
+      'schema.createTable("users", { id: false }, (t) => {',
+      '  t.string("name", { null: false });',
+      '  t.integer("age", { null: false });',
+      '  t.boolean("is_admin", { null: false });',
+      "});",
+    ].join("\n");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-tsc-ts-"));
+    tmpDirs.push(dir);
+    const tsPath = path.join(dir, "schema.ts");
+    fs.writeFileSync(tsPath, schemaSrc);
+
+    const fromTs = loadSchemaColumns(["--schema", tsPath]);
+    const fromJson = loadSchemaColumns([
+      "--schema",
+      writeSchemaJson({
+        users: {
+          name: { type: "string", null: false },
+          age: { type: "integer", null: false },
+          is_admin: { type: "boolean", null: false },
+        },
+      }),
+    ]);
+    // Both paths produce identical SchemaColumnsByTable values.
+    expect(fromTs).toEqual(fromJson);
+    // The loaded schema drives correct type virtualization end-to-end.
+    // Probe types directly rather than checking zero-diagnostics (the schema
+    // fixture has a pre-existing `static override tableName` diagnostic that
+    // is unrelated to schema loading and is not checked by the sibling tests).
+    const configPath = path.join(SCHEMA_DIR, "tsconfig.json");
+    const { program } = createProgramWithArPlugin(configPath, { schemaColumnsByTable: fromTs });
+    const checker = program.getTypeChecker();
+    const consumer = program.getSourceFile(path.join(SCHEMA_DIR, "consumer.ts"));
+    expect(consumer).toBeDefined();
+    const probed: Record<string, string> = {};
+    function visit(node: ts.Node): void {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+        probed[node.name.text] = checker.typeToString(checker.getTypeAtLocation(node.initializer));
+      }
+      node.forEachChild(visit);
+    }
+    consumer!.forEachChild(visit);
+    expect(probed["name"]).toBe("string");
+    expect(probed["age"]).toBe("number");
+    expect(probed["isAdmin"]).toBe("boolean");
+  });
+
   it("without schema, those accesses fall back to unknown (declares weren't injected)", () => {
     const configPath = path.join(SCHEMA_DIR, "tsconfig.json");
     const { program } = createProgramWithArPlugin(configPath);

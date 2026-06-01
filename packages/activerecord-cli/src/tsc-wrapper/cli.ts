@@ -8,6 +8,7 @@ import { remapDiagnostics } from "@blazetrails/trails-tsc";
 import { virtualize } from "@blazetrails/activerecord/type-virtualization/virtualize.js";
 import { createArTrailsProgram, createArSolutionBuilder } from "./ar-program.js";
 import type { SchemaColumnValue } from "@blazetrails/activerecord/type-virtualization/synthesize.js";
+import { parseSchemaTs } from "./schema-ts-parser.js";
 
 /**
  * Load a schema-columns JSON file produced by the schema dumper.
@@ -56,17 +57,21 @@ export function loadSchemaColumns(
     process.stderr.write(`trails-tsc: --schema file not found: ${resolved}\n`);
     process.exit(1);
   }
-  let schemaJson: string;
+  let source: string;
   try {
-    schemaJson = fs.readFileSync(resolved, "utf8");
+    source = fs.readFileSync(resolved, "utf8");
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     process.stderr.write(`trails-tsc: failed to read --schema file: ${msg}\n`);
     process.exit(1);
   }
+  const ext = path.extname(resolved).toLowerCase();
+  if (ext === ".ts" || ext === ".js") {
+    return parseSchemaTs(source, resolved);
+  }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(schemaJson);
+    parsed = JSON.parse(source);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     process.stderr.write(`trails-tsc: --schema file is not valid JSON: ${msg}\n`);
@@ -158,6 +163,16 @@ function validateColumnValue(
     out.arrayElementType = r.arrayElementType as string;
   }
   return out;
+}
+
+function handleHelp(args: string[]): void {
+  if (!args.includes("--help") && !args.includes("-h")) return;
+  process.stdout.write(
+    "Usage: trails-tsc [tsc-options] [--schema <path>]\n\n" +
+      "  --schema <path>  Schema source: db/schema.ts (TypeScript) or a .json dump\n" +
+      "                   from trails-schema-dump. Drives attribute virtualization.\n",
+  );
+  process.exit(0);
 }
 
 function handlePrintVirtualized(args: string[]): void {
@@ -276,6 +291,7 @@ function handleBuildMode(args: string[]): void {
 function main(): void {
   const args = process.argv.slice(2);
 
+  handleHelp(args);
   handlePrintVirtualized(args);
   handleBuildMode(args);
 

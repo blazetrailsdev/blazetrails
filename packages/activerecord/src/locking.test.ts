@@ -710,7 +710,7 @@ describe("PessimisticLockingTest", () => {
   it("typical find with lock", async () => {
     await Person.transaction(async () => {
       const locked = await Person.all().lock().find(people("michael").id);
-      expect((locked as any).first_name).toBe("Michael");
+      expect(locked.first_name).toBe("Michael");
     });
   });
 
@@ -725,32 +725,32 @@ describe("PessimisticLockingTest", () => {
 
   it("lock raises when the record is dirty", async () => {
     const person = await Person.find(people("michael").id);
-    (person as any).first_name = "fooman";
+    person.first_name = "fooman";
     await expect(person.lockBang()).rejects.toThrow(/Changed attributes: "first_name"/);
   });
 
   it("locking in after save callback", async () => {
     const frog = await Frog.create({ name: "Old Frog" });
-    (frog as any).name = "New Frog";
+    frog.name = "New Frog";
     await frog.saveBang();
   });
 
   it("with lock commits transaction", async () => {
     const person = await Person.find(people("michael").id);
     await person.withLock(async () => {
-      (person as any).first_name = "fooman";
+      person.first_name = "fooman";
       await person.saveBang();
     });
     const reloaded = await Person.find(person.id);
-    expect((reloaded as any).first_name).toBe("fooman");
+    expect(reloaded.first_name).toBe("fooman");
   });
 
   it("with lock rolls back transaction", async () => {
     const person = await Person.find(people("michael").id);
-    const old = (person as any).first_name;
+    const old = person.first_name;
     try {
       await person.withLock(async () => {
-        (person as any).first_name = "fooman";
+        person.first_name = "fooman";
         await person.saveBang();
         throw new Error("oops");
       });
@@ -758,7 +758,7 @@ describe("PessimisticLockingTest", () => {
       // expected
     }
     const reloaded = await Person.find(person.id);
-    expect((reloaded as any).first_name).toBe(old);
+    expect(reloaded.first_name).toBe(old);
   });
 
   it("with lock configures transaction", async () => {
@@ -786,7 +786,7 @@ describe("PessimisticLockingTest", () => {
   it("with lock locks with no args", async () => {
     const p = await Person.find(people("michael").id);
     await p.withLock(async () => {
-      expect((p as any).first_name).toBe("Michael");
+      expect(p.first_name).toBe("Michael");
     });
   });
 

@@ -22,10 +22,7 @@ import * as path from "path";
 // Capture the full violation set: neutralize the committed exclude so already
 // excluded files are still re-evaluated (otherwise the baseline can never grow
 // to cover a newly-landed file, and stale entries could never be detected).
-process.env.TEST_FIXTURE_PARITY_EXCLUDE_PATH = path.join(
-  __dirname,
-  "__no-such-exclude__.json",
-);
+process.env.TEST_FIXTURE_PARITY_EXCLUDE_PATH = path.join(__dirname, "__no-such-exclude__.json");
 
 const ROOT = path.resolve(__dirname, "..");
 const OUT_PATH = path.join(ROOT, "eslint/test-fixture-parity-exclude.json");

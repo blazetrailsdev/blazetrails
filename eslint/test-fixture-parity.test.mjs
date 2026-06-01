@@ -27,10 +27,7 @@ beforeAll(() => {
       "excluded.test.ts": ["find single value object"],
     }),
   );
-  fs.writeFileSync(
-    TMP_EXCLUDE,
-    JSON.stringify(["packages/activerecord/src/excluded.test.ts"]),
-  );
+  fs.writeFileSync(TMP_EXCLUDE, JSON.stringify(["packages/activerecord/src/excluded.test.ts"]));
 });
 
 afterAll(() => {

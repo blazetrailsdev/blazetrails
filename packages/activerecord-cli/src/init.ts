@@ -1,6 +1,7 @@
 import { access, mkdir, readFile, writeFile } from "fs/promises";
 import { basename, dirname, join } from "path";
 import { renderManifest } from "./generate-manifest.js";
+import { FRESH_TSCONFIG, mergeTsconfig, TsconfigMergeResult } from "./tsconfig-merge.js";
 
 // The files `ar init` writes, mirroring the §4.7 layout in the
 // standalone-activerecord-cli proposal. `db/migrate/` is a directory, kept
@@ -175,6 +176,8 @@ export interface InitResult {
   skipped: string[];
   /** Set when an existing package.json was updated (not created fresh). */
   packageJsonUpdated?: { added: string[]; alreadyPresent: string[] };
+  /** Set when an existing tsconfig.json was merged (not created fresh). */
+  tsconfigMerged?: TsconfigMergeResult;
 }
 
 export interface InitOptions {
@@ -189,6 +192,11 @@ export interface InitOptions {
    * Set by `ar new`, which writes its own package.json before calling init().
    */
   skipPackageJson?: boolean;
+  /**
+   * Skip tsconfig.json management.
+   * Set by `ar new`, which handles tsconfig directly before calling init().
+   */
+  skipTsconfig?: boolean;
 }
 
 /**
@@ -205,10 +213,12 @@ export async function init(root: string, opts: InitOptions = {}): Promise<InitRe
     overrides = {},
     driver = "better-sqlite3",
     skipPackageJson = false,
+    skipTsconfig = false,
   } = opts;
   const created: string[] = [];
   const skipped: string[] = [];
   let packageJsonUpdated: InitResult["packageJsonUpdated"];
+  let tsconfigMerged: InitResult["tsconfigMerged"];
 
   if (!skipPackageJson) {
     const pkgPath = join(root, "package.json");
@@ -234,6 +244,32 @@ export async function init(root: string, opts: InitOptions = {}): Promise<InitRe
     }
   }
 
+  // tsconfig.json: merge into existing if present, else scaffold fresh.
+  if (!skipTsconfig && !Object.prototype.hasOwnProperty.call(overrides, "tsconfig.json")) {
+    const tsconfigPath = join(root, "tsconfig.json");
+    let tsconfigExists = false;
+    try {
+      await access(tsconfigPath);
+      tsconfigExists = true;
+    } catch {
+      // doesn't exist yet
+    }
+
+    if (tsconfigExists && !force) {
+      const existing = await readFile(tsconfigPath, "utf8");
+      tsconfigMerged = mergeTsconfig(existing);
+      await writeFile(tsconfigPath, tsconfigMerged.content, "utf8");
+    } else {
+      try {
+        await writeFile(tsconfigPath, FRESH_TSCONFIG, { flag: force ? "w" : "wx" });
+        created.push("tsconfig.json");
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+        skipped.push("tsconfig.json");
+      }
+    }
+  }
+
   for (const [rel, defaultBody] of SCAFFOLD) {
     const body = Object.prototype.hasOwnProperty.call(overrides, rel)
       ? overrides[rel]
@@ -248,5 +284,5 @@ export async function init(root: string, opts: InitOptions = {}): Promise<InitRe
       skipped.push(rel);
     }
   }
-  return { created, skipped, packageJsonUpdated };
+  return { created, skipped, packageJsonUpdated, tsconfigMerged };
 }

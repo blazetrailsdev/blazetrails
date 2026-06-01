@@ -1,6 +1,7 @@
-import { mkdir, writeFile } from "fs/promises";
+import { access, mkdir, readFile, writeFile } from "fs/promises";
 import { dirname, join } from "path";
 import { init } from "./init.js";
+import { FRESH_TSCONFIG, mergeTsconfig } from "./tsconfig-merge.js";
 
 export type Driver = "better-sqlite3" | "node-sqlite" | "pg" | "mysql2";
 
@@ -102,20 +103,6 @@ function packageJson(appName: string, driver: Driver): string {
   );
 }
 
-const TSCONFIG = `{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "Node16",
-    "moduleResolution": "Node16",
-    "strict": true,
-    "outDir": "dist",
-    "rootDir": "."
-  },
-  "include": ["./**/*.ts"],
-  "exclude": ["node_modules", "dist"]
-}
-`;
-
 const GITIGNORE = `node_modules/
 dist/
 *.sqlite3
@@ -158,8 +145,32 @@ export async function arNew(
   }
 
   await write("package.json", packageJson(appName, driver));
-  await write("tsconfig.json", TSCONFIG);
   await write(".gitignore", GITIGNORE);
+
+  // tsconfig.json: merge into existing when --force lands on a non-empty dir;
+  // otherwise scaffold a fresh one.
+  const tsconfigPath = join(appDir, "tsconfig.json");
+  let tsconfigExists = false;
+  try {
+    await access(tsconfigPath);
+    tsconfigExists = true;
+  } catch {
+    // doesn't exist
+  }
+  if (tsconfigExists && !force) {
+    // Shouldn't happen for a normal `ar new` (fresh dir), but handle gracefully.
+    const existing = await readFile(tsconfigPath, "utf8");
+    const merged = mergeTsconfig(existing);
+    await writeFile(tsconfigPath, merged.content, "utf8");
+  } else {
+    try {
+      await writeFile(tsconfigPath, FRESH_TSCONFIG, { flag: force ? "w" : "wx" });
+      created.push("tsconfig.json");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+      skipped.push("tsconfig.json");
+    }
+  }
 
   const overrides: Record<string, string> = {
     "config/database.ts": databaseConfig(appName, driver),
@@ -167,7 +178,13 @@ export async function arNew(
   // node-sqlite must be explicitly registered before establishConnection().
   if (driver === "node-sqlite") overrides["db.ts"] = DB_GLUE_NODE_SQLITE;
 
-  const initResult = await init(appDir, { force, overrides, driver, skipPackageJson: true });
+  const initResult = await init(appDir, {
+    force,
+    overrides,
+    driver,
+    skipPackageJson: true,
+    skipTsconfig: true,
+  });
   for (const rel of initResult.created) created.push(rel);
   for (const rel of initResult.skipped) skipped.push(rel);
 

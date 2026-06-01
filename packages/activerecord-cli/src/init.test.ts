@@ -7,6 +7,7 @@ import { generateManifest } from "./generate-manifest.js";
 
 const EXPECTED = [
   "package.json",
+  "tsconfig.json",
   "config/database.ts",
   "db/migrate/.gitkeep",
   "db/seeds.ts",
@@ -49,9 +50,9 @@ describe("ArInitTest", () => {
     expect(await readFile(join(root, "config/database.ts"), "utf8")).toBe("// mine\n");
 
     const second = await init(root);
+    // tsconfig.json is merged (not skipped) on re-run; package.json is updated (not skipped).
     expect(second.created).toEqual([]);
-    // package.json now updated (not created) on second run, so it won't be in skipped
-    const expectedSkipped = EXPECTED.filter((r) => r !== "package.json");
+    const expectedSkipped = EXPECTED.filter((r) => r !== "package.json" && r !== "tsconfig.json");
     expect(second.skipped.sort()).toEqual([...expectedSkipped].sort());
   });
 

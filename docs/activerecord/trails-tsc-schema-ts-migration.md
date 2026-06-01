@@ -72,7 +72,8 @@ Column-line forms the parser must handle (all emitted by `SchemaDumper`):
   dumper's `null: true`-when-no-NOT-NULL semantics.
 - Arrays: `{ array: true }` in the colspec. The parser must emit
   `{ type: "array", arrayElementType: dslType }` — **not** `type: dslType`.
-  `synthesize.ts:122` only renders `ElementTsType[]` when `type === "array"`
+  `activerecord/src/type-virtualization/synthesize.ts` (`renderSchemaValueType`)
+  only renders `ElementTsType[]` when `type === "array"`
   _and_ `arrayElementType` is set; emitting `type: "string"` with an
   `arrayElementType` would drop the `[]` and render a bare `string`. This
   matches the JSON dumper, which records `type: "array"` + `arrayElementType`.
@@ -126,8 +127,10 @@ and want a connection). Walk the `defineSchema` body:
 4. Emit `{ table: { col: { type, null, arrayElementType? } } }`.
 
 The Rails-type → TS-type mapping already lives in
-`type-virtualization/type-registry.ts` (`ATTRIBUTE_TYPE_MAP` / `tsTypeFor`,
-consumed by `synthesize.ts`) and is unchanged — the parser emits Rails type
+`activerecord/src/type-virtualization/type-registry.ts` (`ATTRIBUTE_TYPE_MAP` /
+`tsTypeFor`, consumed by `synthesize.ts`) and is unchanged — note this is in
+`@blazetrails/activerecord`, whereas `loadSchemaColumns` lives in
+`activerecord-cli/src/tsc-wrapper/cli.ts`. The parser emits Rails type
 _strings_, exactly like the JSON dumper does today.
 
 **`--schema` dispatch.** Detect by extension: `.ts`/`.js` → AST parser; `.json`
@@ -182,9 +185,18 @@ Gated on A–C merged so nothing is left pointing at the removed bin.
 - Remove `cli.test.ts` / `delegate.test.ts` cases that exercise `schema:dump`
   / the bin delegate.
 - Decide `dumpSchemaColumns` + `schema-columns-dump.ts` in `@blazetrails/activerecord`
-  per Q2 (only remaining references are a doc-comment in `virtualize.ts` and
-  the `index.ts` export). If nothing else consumes it, delete it and its test;
-  otherwise keep and mark `@internal`.
+  per Q2. The only **runtime** consumer is `bin/trails-schema-dump.ts:86`
+  (removed in this PR); every other reference is a doc-comment or the export.
+  Full reference list the executor must scrub to satisfy "grep-clean":
+  - `packages/activerecord/src/schema-columns-dump.ts` — definition + its test.
+  - `packages/activerecord/src/index.ts:194` — re-export.
+  - Doc-comments (4): `type-virtualization/virtualize.ts:61`,
+    `type-virtualization/synthesize.ts:35`,
+    `schema-introspection.ts:5` (all in `@blazetrails/activerecord`), and
+    `activerecord-cli/src/tsc-wrapper/cli.ts:118`.
+
+  If nothing else consumes it, delete the function + test and scrub the four
+  comments; otherwise keep and mark `@internal`.
 
 ## Known limitations / edges to verify
 
@@ -219,8 +231,9 @@ Gated on A–C merged so nothing is left pointing at the removed bin.
   thin warn-once shim through one minor, since external `package.json`
   typecheck scripts reference it.
 - **Q2 — `dumpSchemaColumns`/`schema-columns-dump.ts`:** delete with the bin
-  (no remaining runtime consumer) or retain as `@internal`? Recommendation:
-  delete — `schema.ts` is now the single source and keeping a dead second
+  (no remaining runtime consumer — only the four doc-comments + export listed
+  in PR D) or retain as `@internal`? Recommendation: delete and scrub the
+  comments — `schema.ts` is now the single source and keeping a dead second
   dumper invites drift.
 
 ## Acceptance

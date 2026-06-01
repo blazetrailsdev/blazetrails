@@ -12,10 +12,7 @@ import path from "path";
 // To run locally:
 //   PG_TEST_URL=postgres://... pnpm vitest run --config vitest.pg-canary.config.ts
 
-const MIGRATED_FILES = [
-  // Add migrated test files here, e.g.:
-  // "packages/activerecord/src/aggregations.test.ts",
-];
+const MIGRATED_FILES = ["packages/activerecord/src/coders/json.test.ts"];
 
 const SHARED_EXCLUDE = [
   "**/node_modules/**",
@@ -164,7 +161,6 @@ export default defineConfig({
           name: "ar-pg-canary",
           include: MIGRATED_FILES,
           exclude: [...SHARED_EXCLUDE, ...ADAPTER_SPECIFIC_EXCLUDE],
-          passWithNoTests: true,
           setupFiles: [
             "./packages/activerecord/src/test-setup-worker-db.ts",
             "./packages/activerecord/src/test-setup-ar.ts",

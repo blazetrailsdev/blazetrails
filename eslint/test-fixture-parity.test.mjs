@@ -31,6 +31,8 @@ afterAll(() => {
   else process.env.TEST_FIXTURE_PARITY_MAP_PATH = _prevMapPath;
 });
 
+const AR = (rel) => path.join(ROOT, "packages/activerecord/src", rel);
+
 describe("test-fixture-parity rule", () => {
   it("runs RuleTester cases", async () => {
     const tester = new RuleTester({
@@ -44,28 +46,48 @@ describe("test-fixture-parity rule", () => {
     tester.run("test-fixture-parity", rule, {
       valid: [
         {
-          name: "describe with useFixtures → no warning",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `describe("T", () => { const fx = useFixtures(["customers"], () => conn); it("find single value object", () => {}); });`,
+          name: "accessor called in it() body → no warning",
+          filename: AR("aggregations.test.ts"),
+          code: `describe("T", () => { const { customers } = useFixtures(["c"], () => conn); it("find single value object", () => { customers("david"); }); });`,
         },
         {
-          name: "useHandlerFixtures (PR #2755 pattern) satisfies the check",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `const { topics } = useHandlerFixtures({ topics: [Topic, { r: {} }] }); describe("T", () => { it("find single value object", () => {}); });`,
+          name: "useHandlerFixtures accessor called in body → no warning",
+          filename: AR("aggregations.test.ts"),
+          code: `const { customers } = useHandlerFixtures({ customers: [C, {}] }); describe("T", () => { it("find single value object", () => { customers("david"); }); });`,
         },
         {
-          name: "useHandlerTransactionalFixtures also satisfies",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `describe("T", () => { useHandlerTransactionalFixtures(); it("find single value object", () => {}); });`,
+          name: "useHandlerTransactionalFixtures (no accessor) → scope-level pass",
+          filename: AR("aggregations.test.ts"),
+          code: `describe("T", () => { useHandlerTransactionalFixtures(); it("find single value object", () => { expect(1).toBe(1); }); });`,
+        },
+        {
+          name: "accessor from outer describe used in nested it() → no warning",
+          filename: AR("aggregations.test.ts"),
+          code: `describe("Outer", () => { const { customers } = useFixtures(["c"], () => conn); describe("Inner", () => { it("find single value object", () => { customers("david"); }); }); });`,
+        },
+        {
+          name: "accessor at file scope used in describe it() → no warning",
+          filename: AR("aggregations.test.ts"),
+          code: `const { customers } = useFixtures(["c"], () => conn); describe("T", () => { it("find single value object", () => { customers("david"); }); });`,
+        },
+        {
+          name: "it.skipIf with accessor called → no warning",
+          filename: AR("aggregations.test.ts"),
+          code: `describe("T", () => { const { customers } = useFixtures(["c"], () => conn); it.skipIf(true)("find single value object", () => { customers("david"); }); });`,
+        },
+        {
+          name: "describe.only recognized as scope",
+          filename: AR("aggregations.test.ts"),
+          code: `describe.only("T", () => { const { customers } = useFixtures(["c"], () => conn); it("find single value object", () => { customers("david"); }); });`,
         },
         {
           name: "test not in mapping → no warning",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `describe("X", () => { it("trails-only test not in rails", () => {}); });`,
+          filename: AR("aggregations.test.ts"),
+          code: `describe("X", () => { it("trails-only test", () => {}); });`,
         },
         {
           name: "file not in mapping → no warning",
-          filename: path.join(ROOT, "packages/activerecord/src/attribute-methods.test.ts"),
+          filename: AR("attribute-methods.test.ts"),
           code: `describe("X", () => { it("find single value object", () => {}); });`,
         },
         {
@@ -73,59 +95,35 @@ describe("test-fixture-parity rule", () => {
           filename: path.join(ROOT, "packages/arel/src/foo.test.ts"),
           code: `describe("X", () => { it("find single value object", () => {}); });`,
         },
-        {
-          name: "useFixtures at file scope satisfies it() at file scope",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `const fx = useFixtures(["customers"], () => conn); it("find single value object", () => {});`,
-        },
-        {
-          name: "useFixtures at file scope satisfies it() inside describe",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `const fx = useFixtures(["customers"], () => conn); describe("T", () => { it("find single value object", () => {}); });`,
-        },
-        {
-          name: "useFixtures in outer describe satisfies it() in nested describe",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `describe("Outer", () => { useFixtures(["customers"], () => conn); describe("Inner", () => { it("find single value object", () => {}); }); });`,
-        },
-        {
-          name: "describe.only is recognized as a describe scope",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `describe.only("T", () => { useFixtures(["customers"], () => conn); it("find single value object", () => {}); });`,
-        },
-        {
-          name: "it.skipIf(cond)(...) is checked and passes when useFixtures present",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `describe("T", () => { useFixtures(["customers"], () => conn); it.skipIf(true)("find single value object", () => {}); });`,
-        },
-        {
-          name: "describe.skipIf(cond)(...) is recognized as describe scope",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `describe.skipIf(true)("T", () => { useFixtures(["customers"], () => conn); it("find single value object", () => {}); });`,
-        },
       ],
       invalid: [
         {
-          name: "describe missing useFixtures → warns",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `describe("T", () => { it("find single value object", () => {}); });`,
+          name: "no useFixtures in scope → warns",
+          filename: AR("aggregations.test.ts"),
+          code: `describe("T", () => { it("find single value object", () => { expect(1).toBe(1); }); });`,
           errors: [{ messageId: "missing" }],
         },
         {
-          name: "subdirectory file warned",
-          filename: path.join(ROOT, "packages/activerecord/src/associations/eager.test.ts"),
+          name: "useFixtures present but it() body never calls accessor → warns",
+          filename: AR("aggregations.test.ts"),
+          code: `describe("T", () => { const { customers } = useFixtures(["c"], () => conn); it("find single value object", () => { expect(1).toBe(1); }); });`,
+          errors: [{ messageId: "missing" }],
+        },
+        {
+          name: "sibling describe accessor not visible → warns",
+          filename: AR("aggregations.test.ts"),
+          code: `describe("A", () => { const { customers } = useFixtures(["c"], () => conn); }); describe("B", () => { it("find single value object", () => { customers("david"); }); });`,
+          errors: [{ messageId: "missing" }],
+        },
+        {
+          name: "subdirectory file without accessor call → warns",
+          filename: AR("associations/eager.test.ts"),
           code: `describe("EagerTest", () => { it("eager loading", () => {}); });`,
           errors: [{ messageId: "missing" }],
         },
         {
-          name: "useFixtures in sibling describe does not satisfy another describe",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
-          code: `describe("A", () => { useFixtures(["customers"], () => conn); }); describe("B", () => { it("find single value object", () => {}); });`,
-          errors: [{ messageId: "missing" }],
-        },
-        {
-          name: "it.skipIf without useFixtures → warns",
-          filename: path.join(ROOT, "packages/activerecord/src/aggregations.test.ts"),
+          name: "it.skipIf without accessor call → warns",
+          filename: AR("aggregations.test.ts"),
           code: `describe("T", () => { it.skipIf(true)("find single value object", () => {}); });`,
           errors: [{ messageId: "missing" }],
         },

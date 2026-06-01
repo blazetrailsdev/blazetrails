@@ -154,6 +154,15 @@ no AR import) and the new sibling file imports both the helpers and
 `ForeignKeyDefinition`. The AR-runtime coupling is then confined to the
 `trails-models-dump` path, which already depends on AR anyway.
 
+(`@blazetrails/activerecord` does expose a `./*` wildcard subpath export
+(`package.json:37`), so `ForeignKeyDefinition` _could_ instead be
+value-imported from the narrow `connection-adapters/abstract/schema-definitions.js`
+subpath — the way `schema-ts-parser.ts` already imports a _type_ from the
+narrow `schema-columns-dump` subpath. But a narrow value import still drags AR
+runtime into a file on the `trails-tsc` barrel; it shrinks the surface without
+removing the coupling. The sibling-file split keeps the boundary clean, so it
+remains the better answer.)
+
 **`parseSchemaForModels` internals:**
 
 1. Reuse the existing `createTable` visitor. Additionally:
@@ -287,6 +296,26 @@ Dependency: PR 3 merged.
 
 ## Risks / open questions
 
+- **Single custom-named primary keys are NOT representable in trails
+  `schema.ts` — the headline parity claim has a hole here.** trails'
+  `SchemaDumper` emits a single PK whose column name ≠ `"id"` as just
+  `{ id: false }` plus an ordinary column line — it does **not** write a
+  `primaryKey: "<col>"` option. Only composite PKs get `tableOpts.primaryKey`
+  (`schema-dumper.ts:921-925`: the `else if (!hasId) tableOpts.id = false`
+  branch emits no `primaryKey:`; `primaryKeyTableOptions` at :857-870 only
+  handles the `uuid`/`id`-named case). **This diverges from Rails**, which
+  emits `primary_key: "<col>"` (`vendor/rails/.../schema_dumper.rb:172` —
+  `tbl.print ", primary_key: #{pk.inspect}" unless pk == "id"`).
+  Consequence: such a table reads back as `primaryKey: null`, and
+  `generateModels` then **skips it** as "no primary key (likely a view)"
+  (`model-codegen.ts:166`) — whereas the live-DB path's `introspectPrimaryKey`
+  recovers the custom column and models it. Resolution: this migration
+  **accepts it as a known limitation** of the `--schema` path and narrows the
+  acceptance criterion accordingly (see below). Fully closing it requires a
+  **prerequisite, out-of-scope `SchemaDumper` fix** to emit single custom PKs
+  (correct vs Rails regardless) — tracked as its own issue, not blocking PRs
+  1–4. Composite PKs are unaffected (they do emit `primaryKey: [...]`).
+
 - **`t.references` never appears in `schema.ts`.**
   `SchemaDumper.emitTable` emits explicit column lines (`t.integer(...)`)
   plus separate top-level `addForeignKey` calls — `t.references` is never
@@ -329,9 +358,27 @@ Dependency: PR 3 merged.
   object literals are NOT structurally assignable to `ForeignKeyDefinition[]`
   in TypeScript. The parser must construct real instances via
   `new ForeignKeyDefinition(...)`. This is straightforward — the constructor
-  takes positional args that map directly to the parsed options. The class is
-  already imported in `activerecord-cli` (via the live-DB path's
-  `introspectForeignKeys` return type).
+  takes positional args that map directly to the parsed options. `activerecord-cli`
+  does not currently value-import the class (the live-DB bin imports only the
+  `IntrospectedTable` _type_), so PR 1 adds a **new value import** from
+  `@blazetrails/activerecord` into the sibling parser file.
+
+- **Absent FK `name:` is the COMMON case, and the synthesized name won't
+  round-trip.** The dumper writes `name:` only when `isExportNameOnSchemaDump`
+  is true — i.e. when the name does NOT match `/^fk_rails_[0-9a-f]{10}$/`
+  (`schema-dumper.ts:1113-1117`, `schema-definitions.ts:131-133`). For the
+  overwhelmingly common Rails auto-named FK, no `name:` is written, so the
+  synthesized name is the **default path**, not an edge case — the PR 1 FK
+  test's primary fixture should be the no-`name:` case. This is harmless:
+  `generateModels` reads `fk.name` **only** inside the composite-FK TODO
+  comment (`model-codegen.ts:241`) and nowhere else — `belongsTo`/`hasMany`
+  names derive from `fk.column`/`toTable`, so the fabricated name never leaks
+  into association names. One thing to flag so nobody assumes otherwise: the
+  synthesized `fk_rails_${fromTable}_${col}` deliberately does NOT match Rails'
+  `fk_rails_<10hex>` shape, so it would **not** satisfy the
+  `isExportNameOnSchemaDump` suppression on a subsequent re-dump (it'd be
+  re-emitted as an explicit `name:`). The parsed FK is for codegen only; it
+  does not round-trip back through the dumper.
 
 ## Non-goals
 
@@ -350,9 +397,12 @@ Dependency: PR 3 merged.
 
 - `ar models:dump --schema db/schema.ts` emits the same class/association
   structure as `ar models:dump --database-url <url>` against the same
-  underlying schema. Verified by the PR 2 integration test: a schema.ts
-  fixture with two tables and one FK produces the same output as running
-  the live-DB path against a SQLite database built from the same DDL.
+  underlying schema, **for schemas representable in `schema.ts`** — i.e.
+  default-`id`, UUID, `id: false`, and composite PKs. Tables with a single
+  custom-named PK are explicitly out of parity scope until the prerequisite
+  `SchemaDumper` fix lands (see Risks). Verified by the PR 2 integration test:
+  a schema.ts fixture with two tables and one FK produces the same output as
+  running the live-DB path against a SQLite database built from the same DDL.
 - No `Base.establishConnection()` is called when `--schema` is the active
   path — confirmed by running `trails-models-dump --schema db/schema.ts`
   with `DATABASE_URL` unset and no DB running.

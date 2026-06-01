@@ -3,12 +3,14 @@
  * Generates eslint/test-fixture-parity.json — trails file → fixture-using
  * test descriptions.
  *
- * Detection signals (union):
- *   1. Class-level `fixtures :foo` + per-test body accessor `foo(:record)` →
- *      marks that specific test (precise: skips tests that don't touch fixtures).
- *   2. Class-level `fixtures :foo` with NO body access detected for a test →
- *      marks the test anyway (Rails still loads fixtures for it; it may use
- *      fixtures indirectly via associations or model state).
+ * Detection signal (precise, body-accessor only):
+ *   Class-level `fixtures :foo` + per-test body accessor `foo(:record)` →
+ *   marks that specific test. Tests that declare fixtures but never call a
+ *   row accessor in their body are NOT marked: the rule gates literal accessor
+ *   usage, so whole-file marking just produced false-positives for tests that
+ *   exercise infrastructure (e.g. connection-handler) or build records inline.
+ *   Trade-off: tests that touch fixture rows only indirectly (via model queries
+ *   without a literal `foo(:record)` call) are no longer gated.
  *
  * Run: pnpm tsx scripts/generate-fixture-parity-map.ts  (commit the result).
  */
@@ -120,14 +122,11 @@ function processFile(file: string): { trailsRel: string; descs: string[] } | nul
   if (tests.length === 0) return null;
 
   const accessorRe = buildAccessorRe(fixtureNames);
+  if (!accessorRe) return null;
 
-  // Mark tests that access fixtures in their body; fall back to marking all
-  // when no body-access is detected (class-level declaration implies availability).
-  const withAccess = accessorRe ? tests.filter((t) => accessorRe.test(t.bodyLines.join("\n"))) : [];
-
-  // If the file declares fixtures but no test body references them, the whole
-  // file still counts — Rails loads them for every test.
-  const useDescs = withAccess.length > 0 ? withAccess.map((t) => t.desc) : tests.map((t) => t.desc);
+  // Mark only tests that call a fixture row accessor in their body. Tests that
+  // declare fixtures but never reference a row are not gated (see header).
+  const useDescs = tests.filter((t) => accessorRe.test(t.bodyLines.join("\n"))).map((t) => t.desc);
 
   if (useDescs.length === 0) return null;
 

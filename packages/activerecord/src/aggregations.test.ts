@@ -264,12 +264,8 @@ describe("AggregationsTest", () => {
 // against the canonical Customer model + composed_of mappings, rather than the
 // ad-hoc inline Customer classes used elsewhere in this file.
 describe("AggregationsTest", () => {
-  // Mirrors Rails `fixtures :customers`: seed the canonical customers rows and
-  // read them through the shared Customer model's composed_of value objects
-  // (Address/Money/GpsLocation/Fullname) instead of bespoke inline classes.
-  // `{ schema }` recreates the canonical `customers` table before seeding so the
-  // full fixture columns resolve regardless of any bespoke `customers` a sibling
-  // file (or block) leaves in the shared worker DB.
+  // Mirrors Rails `fixtures :customers` via the shared Customer model; `{ schema }`
+  // recreates the canonical `customers` table to survive sibling-file contamination.
   const { customers } = useHandlerFixtures(["customers"], { schema: canonicalSchema });
 
   // Rails: test_find_single_value_object
@@ -362,15 +358,8 @@ describe("AggregationsTest", () => {
   // Rails: test_nil_assignment_results_in_nil
   // Rails: test_allow_nil_address_set_to_nil
   // Rails: test_allow_nil_address_loaded_when_only_some_attributes_are_nil
-  // Rails: test_custom_converter
-  // Rails: test_custom_constructor
-  // Rails: test_hash_mapping
-  // Rails: test_value_object_with_hash_mapping_assignment_changes_model_attributes
-  // Rails: test_gps_equality
-  // Rails: test_gps_inequality
   // Rails: test_immutable_value_objects
   // Rails: test_reloaded_instance_refreshes_aggregations
-  // Rails: test_inferred_mapping
   it.skip("gps latitude", () => {
     // BLOCKED: relation — calculation / aggregation gap
     // ROOT-CAUSE: relation/calculations.ts#calculate or Relation#sum/avg/min/max missing Rails parity

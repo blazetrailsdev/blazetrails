@@ -311,6 +311,49 @@ export const UNPORTED_FILES: UnportedFile[] = [
     reason:
       "GVL / Ruby Thread semantics — concurrent connection tests cannot translate to single-threaded Node.js.",
   },
+  // load_async / FutureResult — Ruby thread pool, no JS analog. The whole
+  // relation/load_async_test.rb is excluded above (future_result.rb entry);
+  // these are the scattered thread/fork query-cache cases in mixed files.
+  {
+    testFile: "query_cache_test.rb",
+    tests: [
+      "query cache with forked processes",
+      "query cache across threads",
+      "query caching is local to the current thread",
+      "query cache is enabled in threads with shared connection",
+      "query cache is cleared for all thread when a connection is shared",
+      "threads use the same connection",
+    ],
+    reason:
+      "GVL / Ruby Thread + fork() semantics — per-thread / cross-process query-cache " +
+      "visibility cannot translate to single-threaded Node.js.",
+  },
+  {
+    testFile: "connection_adapters/connection_handlers_multi_db_test.rb",
+    tests: ["multiple connections works in a threaded environment"],
+    reason:
+      "GVL / Ruby Thread semantics — concurrent multi-db connection access on shared " +
+      "objects has no single-threaded Node.js equivalent.",
+  },
+  // SimpleDelegator where — Ruby SimpleDelegator (Delegator/method_missing
+  // forwarding) has no JS analog; Rails unwraps the delegated AR object.
+  {
+    testFile: "relations_test.rb",
+    className: "RelationTest",
+    tests: ["where id with delegated ar object", "where relation with delegated ar object"],
+    reason:
+      "Rails passes a SimpleDelegator-wrapped AR object to where(); the query builder " +
+      "unwraps it via the delegator protocol. JS has no SimpleDelegator equivalent. " +
+      "The plain-object equivalent (find by with delegated ar object) is covered.",
+  },
+  // Scattered YAML/Marshal serialization — Ruby-only formats, no Node.js equivalent.
+  {
+    testFile: "adapters/postgresql/hstore_test.rb",
+    tests: ["yaml round trip with store accessors"],
+    reason:
+      "Ruby YAML/Marshal round-trip of an AR instance with hstore store accessors. " +
+      "Node.js has no YAML.dump/Marshal.dump for ActiveRecord records.",
+  },
   {
     testFile: "serialized_attribute_test.rb",
     tests: [
@@ -341,6 +384,8 @@ export const UNPORTED_FILES: UnportedFile[] = [
       // GVL
       "new threads get default the default connection handler",
       "changing a connection handler in a main thread does not poison the other threads",
+      "connection_handler can be overridden", // Thread.new overrides the handler in a child thread and asserts isolation
+
       // Ruby Marshal serialization
       "marshal round trip",
       "marshal inspected round trip",

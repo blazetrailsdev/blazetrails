@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import { Base } from "./index.js";
 import "./relation.js";
-import { defineSchema } from "./test-helpers/define-schema.js";
-import { setupHandlerSuite } from "./test-helpers/setup-handler-suite.js";
-import { useHandlerTransactionalFixtures } from "./test-helpers/use-handler-transactional-fixtures.js";
-import { useFixtures } from "./test-helpers/use-fixtures.js";
-import { TEST_SCHEMA } from "./test-helpers/test-schema.js";
+import { useHandlerFixtures } from "./test-helpers/use-handler-fixtures.js";
+import { TEST_SCHEMA as canonicalSchema } from "./test-helpers/test-schema.js";
 import { reservedWordsGroupFixtureData } from "./test-helpers/fixtures/reserved-words/group.js";
 
+// Test-file-local classes mirror Rails' `ReservedWordTest::Group` etc. — the
+// tables and columns are SQL reserved words, so they exercise identifier
+// quoting throughout AR. There is no shared canonical model for these.
 class Group extends Base {
   static tableName = "group";
 }
@@ -22,27 +22,15 @@ class Distinct extends Base {
   static tableName = "distinct";
 }
 
-setupHandlerSuite();
-useHandlerTransactionalFixtures();
-beforeAll(async () => {
-  await defineSchema({
-    group: TEST_SCHEMA.group,
-    select: TEST_SCHEMA.select,
-    distinct: TEST_SCHEMA.distinct,
-    distinct_select: TEST_SCHEMA.distinct_select,
-    values: TEST_SCHEMA.values,
-  });
-  await Promise.all([
-    Group.loadSchema(),
-    Select.loadSchema(),
-    Values.loadSchema(),
-    Distinct.loadSchema(),
-  ]);
-});
-
-const { groups } = useFixtures(
+// Mirrors Rails `use_instantiated_fixtures = true` + the custom
+// `create_test_fixtures :group` loader: seed the canonical reserved-word
+// `group` rows and read them through the accessor. `schema` recreates the
+// canonical `group` table (sliced from TEST_SCHEMA) so the columns and rows
+// resolve regardless of any bespoke `group` a sibling file left in the shared
+// worker DB.
+const { groups } = useHandlerFixtures(
   { groups: [Group, reservedWordsGroupFixtureData] },
-  () => Base.connection,
+  { schema: canonicalSchema },
 );
 
 describe("ReservedWordTest", () => {
@@ -103,6 +91,7 @@ describe("ReservedWordTest", () => {
   });
 
   it("calculations work with reserved words", async () => {
+    expect(groups("group1")).not.toBeNull();
     expect(await Group.count()).toBe(3);
   });
 

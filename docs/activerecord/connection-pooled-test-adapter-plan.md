@@ -1,6 +1,6 @@
 # Connection-pooled test adapter — Rails-parity epic
 
-**Status: Complete (2026-05-28).** All phases shipped.
+**Status: Phases A–F complete (2026-05-28).** Phase G (fixture adoption) is ongoing — tracked in [`fixtures-adoption-plan.md`](fixtures-adoption-plan.md).
 
 | Phase                                       | PRs                        | What shipped                                                                                                                              |
 | ------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -10,7 +10,6 @@
 | D-1..N bypass elimination                   | ~97 files                  | `Model.adapter = X` bypass cleared across test suite                                                                                      |
 | E — delete singleton/AsyncContext filter    | #2514, #2527, #2533, #2536 | `_sharedAdapter`, `_txLockStorage`, `_manualTxDepth`, `_txVisible` deleted                                                                |
 | F — DDL tracking removal + wrapper deletion | #2537, #2538, #2545 + main | `recordDdlTracking`, `_createdTables`, `ddl-tracker.ts`, `TestAdapterFixtures`, `SidecarFixtures`, `createTestAdapter()` shim all deleted |
-| G — fixture adoption                        | #2318, #2391 (canary)      | Tracked in [`fixtures-adoption-plan.md`](fixtures-adoption-plan.md)                                                                       |
 
 **End state:** No `_sharedAdapter`, no `_txLockStorage`/`_manualTxDepth`/`_txVisible`, no
 `recordDdlTracking`/`ddl-tracker.ts`, no `TestAdapterFixtures`/`SidecarFixtures` wrappers,

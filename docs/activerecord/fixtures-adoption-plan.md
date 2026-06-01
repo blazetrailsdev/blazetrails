@@ -87,6 +87,6 @@ across 20+ batch PRs:
 ## Cross-references
 
 - `fixtures-adoption-inventory.md` — per-file tier classification; re-run `pnpm fixtures:adoption:inventory` to refresh
-- [`connection-pooled-test-adapter-plan.md`](connection-pooled-test-adapter-plan.md) — pool epic; Phase E shipped
+- [`connection-pooled-test-adapter-plan.md`](connection-pooled-test-adapter-plan.md) — pool epic; fully complete 2026-05-28
 - `vendor/rails/activerecord/test/cases/` — Rails counterparts whose test bodies this plan mirrors
 - `scripts/api-compare/test-mapping.json` — Rails-counterpart source of truth

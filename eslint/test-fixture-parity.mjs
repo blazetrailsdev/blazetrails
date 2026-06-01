@@ -166,8 +166,7 @@ const rule = {
           const callback = node.arguments[node.arguments.length - 1];
           const callbackBody =
             callback &&
-            (callback.type === "ArrowFunctionExpression" ||
-              callback.type === "FunctionExpression")
+            (callback.type === "ArrowFunctionExpression" || callback.type === "FunctionExpression")
               ? callback.body
               : null;
           toCheck.push({

@@ -1049,7 +1049,7 @@ export class Relation<T extends Base> {
     // appended in call-order relative to any existing order clauses.
     // _applyOrderToManager detects CASE-style SQL via the "(" heuristic and
     // a /\bcase\b/i check, then emits it as SqlLiteral.
-    rel._orderClauses.push(orderNode.toSql());
+    rel._orderClauses.push(rel._compileArelNode(orderNode));
 
     // Add WHERE col IN (values) filter — mirrors Rails' arel_column.in(values.compact).
     // Attribute#in uses buildQuoted (no type-caster context); the values were already
@@ -2337,7 +2337,7 @@ export class Relation<T extends Base> {
 
     const manager = this._buildEagerJoinManager(jd, basePk);
 
-    let sql = manager.toSql();
+    let sql = this._modelClass.connection.toSql(manager);
     if (this._annotations.length > 0) {
       const comments = this._annotationComments();
       sql = `${sql} ${comments}`;
@@ -2801,7 +2801,9 @@ export class Relation<T extends Base> {
     for (const col of rel._groupColumns) manager.group(groupColumnToArel(col, table));
     if (!rel._havingClause.isEmpty()) manager.having(rel._havingClause.ast);
     manager.take(1);
-    const rows = await rel._modelClass.connection.execute(manager.toSql());
+    const rows = await rel._modelClass.connection.execute(
+      rel._modelClass.connection.toSql(manager),
+    );
     return rows.length > 0;
   }
 
@@ -2963,7 +2965,7 @@ export class Relation<T extends Base> {
     if (this._limitValue !== null) manager.take(this._limitValue);
     if (this._offsetValue !== null) manager.skip(this._offsetValue);
 
-    const sql = manager.toSql();
+    const sql = this._modelClass.connection.toSql(manager);
     const result = await this._modelClass.connection.selectAll(
       sql,
       `${this._modelClass.name} Pluck`,
@@ -4758,7 +4760,9 @@ export class Relation<T extends Base> {
           new Nodes.NamedFunction("COUNT", [new Nodes.SqlLiteral("*")]).as("size"),
           subColumn.maximum().as("timestamp"),
         );
-        const rows = await this._modelClass.connection.execute(outerManager.toSql());
+        const rows = await this._modelClass.connection.execute(
+          this._modelClass.connection.toSql(outerManager),
+        );
         size = Number(rows[0]?.size ?? 0);
         timestamp = rows[0]?.timestamp;
       } else {

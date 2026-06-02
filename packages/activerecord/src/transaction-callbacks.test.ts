@@ -37,7 +37,7 @@ describe("TransactionCallbacksTest", () => {
     });
     const originalTxn = currentTransaction();
     const t = new Topic({ title: "x" });
-    await expect(t.save()).rejects.toThrow("better pop this txn from the stack!");
+    await expect(t.saveBang()).rejects.toThrow("better pop this txn from the stack!");
     expect(currentTransaction()).toBe(originalTxn);
   });
 
@@ -481,14 +481,17 @@ describe("TransactionCallbacksTest", () => {
     const second = new Topic({});
     try {
       await transaction(Topic, async () => {
-        await first.save();
+        await first.saveBang();
         expect(first.id).not.toBeNull();
-        await second.save();
+        await second.saveBang();
         expect(second.id).not.toBeNull();
         throw new Rollback();
       });
-    } catch {
-      // after_rollback raised ErrorClass — the rollback state restore still runs.
+    } catch (e) {
+      // Mirror Rails' `rescue error_class`: only swallow the error the rollback
+      // callback raised. Re-throw anything else so a failure in the state-restore
+      // path can't hide behind a blanket catch.
+      if (!(e instanceof ErrorClass)) throw e;
     }
     expect(first.id).toBeNull();
     expect(second.id).toBeNull();
@@ -685,12 +688,36 @@ describe("TransactionCallbacksTest", () => {
         this.attribute("title", "string");
       }
     }
+    // Full mirror of Rails' add_transaction_execution_blocks: all six
+    // commit/rollback blocks. Only the create + update commit blocks fire in
+    // this all-commit path; the destroy/rollback blocks are inert here.
     Topic.afterCreateCommit(function (record: any) {
       (record.history ??= []).push("commit_on_create");
     });
     Topic.afterUpdateCommit(function (record: any) {
       (record.history ??= []).push("commit_on_update");
     });
+    Topic.afterDestroyCommit(function (record: any) {
+      (record.history ??= []).push("commit_on_destroy");
+    });
+    Topic.afterRollback(
+      function (record: any) {
+        (record.history ??= []).push("rollback_on_create");
+      },
+      { on: "create" },
+    );
+    Topic.afterRollback(
+      function (record: any) {
+        (record.history ??= []).push("rollback_on_update");
+      },
+      { on: "update" },
+    );
+    Topic.afterRollback(
+      function (record: any) {
+        (record.history ??= []).push("rollback_on_destroy");
+      },
+      { on: "destroy" },
+    );
     // Re-save inside the create-commit callback: must fire commit_on_update
     // exactly once, and must NOT re-invoke the create-commit callback.
     Topic.afterCreateCommit(async function (record: any) {

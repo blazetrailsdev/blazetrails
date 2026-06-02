@@ -1044,7 +1044,7 @@ describe("TransactionTest", () => {
     const movie = Movie.new({ name: "foo" }) as any;
 
     await Movie.transaction(async () => {
-      await movie.save();
+      await movie.saveBang();
       throw new Rollback();
     });
 

@@ -1,13 +1,19 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { queryTransformers } from "./query-transformers.js";
 import type { QueryTransformer } from "./query-transformers.js";
 import { QueryLogs } from "./query-logs.js";
 
 describe("queryTransformers", () => {
-  // Process-global, like ActiveRecord.query_transformers — restore after each
-  // test so registration here can't leak into sibling suites.
+  // Process-global, like ActiveRecord.query_transformers. Snapshot the live
+  // contents and restore them (rather than `length = 0`) so that once a later
+  // PR registers a default transformer at import time, these tests neither wipe
+  // it nor leak an emptied registry into sibling suites.
+  let saved: QueryTransformer[];
+  beforeEach(() => {
+    saved = [...queryTransformers];
+  });
   afterEach(() => {
-    queryTransformers.length = 0;
+    queryTransformers.splice(0, queryTransformers.length, ...saved);
   });
 
   it("defaults to an empty list", () => {

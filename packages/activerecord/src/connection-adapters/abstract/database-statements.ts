@@ -74,7 +74,7 @@ export function inspectExplainOption(o: unknown): string {
  */
 export interface DatabaseStatementsHost {
   preparedStatements?: boolean;
-  execute?(sql: string, name?: string | null): Promise<unknown>;
+  execute?(sql: string, binds?: unknown[], name?: string | null): Promise<unknown>;
   selectAll?(
     sql: string,
     name?: string | null,
@@ -425,7 +425,7 @@ export function isWriteQuery(_sql: string): boolean {
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#execute
  */
-export function execute(_sql: string, _name?: string | null): Promise<unknown> {
+export function execute(_sql: string, _binds?: unknown[], _name?: string | null): Promise<unknown> {
   throw new Error("execute must be implemented by adapter subclass");
 }
 
@@ -603,8 +603,9 @@ export async function truncate(
   name?: string | null,
 ): Promise<unknown> {
   const sql = `TRUNCATE TABLE ${this.quoteTableName(tableName)}`;
-  // Rails: execute(build_truncate_statement(table_name), name)
-  return (this.execute ?? execute).call(this, sql, name);
+  // Rails: execute(build_truncate_statement(table_name), name). Trails' execute
+  // signature is (sql, binds, name), so the log label goes in the third slot.
+  return (this.execute ?? execute).call(this, sql, [], name ?? undefined);
 }
 
 /**
@@ -990,7 +991,30 @@ export async function insertFixture(
   tableName: string,
 ): Promise<unknown> {
   const columns = Object.keys(fixture);
-  const values = Object.values(fixture).map((v) => this.quote(withYamlFallback(v)));
+
+  // Rails' build_fixture_sql serializes each value through the column's cast
+  // type before quoting (`with_yaml_fallback(type.serialize(value))`), so e.g.
+  // a JS array bound for a PG `text[]` column becomes a `{...}` array literal
+  // rather than a raw JSON dump. Look up the column types when the adapter
+  // exposes the schema; fall back to the plain quote path otherwise (keeps
+  // bare hosts without `columns`/`lookupCastTypeFromColumn` working).
+  const host = this as unknown as {
+    columns?: (t: string) => Promise<Array<{ name: string }>>;
+    lookupCastTypeFromColumn?: (c: unknown) => { serialize?(v: unknown): unknown } | null;
+  };
+  const tableColumns = typeof host.columns === "function" ? await host.columns(tableName) : [];
+  const columnsByName = new Map(tableColumns.map((c) => [c.name, c]));
+  const values = Object.entries(fixture).map(([name, v]) => {
+    const column = columnsByName.get(name);
+    const type =
+      column && typeof host.lookupCastTypeFromColumn === "function"
+        ? host.lookupCastTypeFromColumn(column)
+        : null;
+    if (type && typeof type.serialize === "function") {
+      return this.quote(type.serialize(v));
+    }
+    return this.quote(withYamlFallback(v));
+  });
 
   const emptyValue = this.emptyInsertStatementValue?.() ?? emptyInsertStatementValue();
   const sql =
@@ -998,8 +1022,9 @@ export async function insertFixture(
       ? `INSERT INTO ${this.quoteTableName(tableName)} (${columns.map((c) => this.quoteColumnName(c)).join(", ")}) VALUES (${values.join(", ")})`
       : `INSERT INTO ${this.quoteTableName(tableName)} ${emptyValue}`;
 
-  // Rails: execute(build_fixture_sql(...), "Fixture Insert")
-  return (this.execute ?? execute).call(this, sql, "Fixture Insert");
+  // Rails: execute(build_fixture_sql(...), "Fixture Insert"). Trails' execute
+  // signature is (sql, binds, name), so the log label goes in the third slot.
+  return (this.execute ?? execute).call(this, sql, [], "Fixture Insert");
 }
 
 /**

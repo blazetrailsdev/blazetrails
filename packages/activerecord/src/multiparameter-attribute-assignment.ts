@@ -180,12 +180,18 @@ function buildDate(year: number, month: number, day: number): Temporal.PlainDate
     // Rails' `read_date` rescues an invalid `Date.new(*set_values)` and falls
     // back to `instantiate_time_object(set_values).to_date` — i.e. it lets the
     // overflowing components roll over the way `Time.local` does (Nov 31 → Dec 1,
-    // Feb 29 in a common year → Mar 1) rather than raising. Reproduce that by
-    // balancing the excess months/days onto Jan 1 of the year.
-    return Temporal.PlainDate.from({ year, month: 1, day: 1 }).add({
-      months: month - 1,
-      days: day - 1,
-    });
+    // Feb 29 in a common year → Mar 1). But `Time.local` only tolerates *day*
+    // overflow: an out-of-range month (13) or a non-positive day still raises
+    // `ArgumentError`, which Rails surfaces as a MultiparameterAssignmentErrors.
+    // So roll over only when month/day are in Time's accepted domain; otherwise
+    // re-raise to match Time's strictness rather than silently rolling.
+    if (month >= 1 && month <= 12 && day >= 1) {
+      return Temporal.PlainDate.from({ year, month: 1, day: 1 }).add({
+        months: month - 1,
+        days: day - 1,
+      });
+    }
+    throw new Error(`Invalid date: ${year}-${month}-${day}`);
   }
 }
 

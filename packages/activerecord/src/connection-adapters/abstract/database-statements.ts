@@ -1011,7 +1011,11 @@ export async function insertFixture(
         ? host.lookupCastTypeFromColumn(column)
         : null;
     if (type && typeof type.serialize === "function") {
-      return this.quote(type.serialize(v));
+      // Rails: with_yaml_fallback(type.serialize(value)). The fallback is a
+      // no-op for the wire forms real types produce (strings, numbers, the
+      // OID::Array `Data` wrapper) and only YAML-dumps a type whose serialize
+      // returns a raw Hash/Array.
+      return this.quote(withYamlFallback(type.serialize(v)));
     }
     return this.quote(withYamlFallback(v));
   });
@@ -1124,14 +1128,16 @@ export function sanitizeLimit(limit: unknown): number | Nodes.SqlLiteral {
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#with_yaml_fallback
  */
 export function withYamlFallback(value: unknown): unknown {
-  if (
-    Array.isArray(value) ||
-    (value !== null &&
-      typeof value === "object" &&
-      !(value instanceof Date) &&
-      !isTemporalValue(value))
-  ) {
-    return JSON.stringify(value);
+  // Rails (database_statements.rb:519-525) YAML-dumps only Hash and Array
+  // values; scalars and every other object pass through to be quoted
+  // directly. Mirror that by dumping only arrays and plain (Hash-like)
+  // objects — never class instances such as Date/Temporal or the `Data`
+  // wrapper returned by OID::Array#serialize, which carry their own
+  // quotable representation and must reach quote() intact.
+  if (Array.isArray(value)) return JSON.stringify(value);
+  if (value !== null && typeof value === "object") {
+    const proto = Object.getPrototypeOf(value);
+    if (proto === Object.prototype || proto === null) return JSON.stringify(value);
   }
   return value;
 }
@@ -1167,16 +1173,6 @@ export function temporalToBindString(
   }
   if (value instanceof Temporal.ZonedDateTime) return formatInstantForSql(value.toInstant());
   return value;
-}
-
-function isTemporalValue(value: object): boolean {
-  return (
-    value instanceof Temporal.Instant ||
-    value instanceof Temporal.PlainDateTime ||
-    value instanceof Temporal.PlainDate ||
-    value instanceof Temporal.PlainTime ||
-    value instanceof Temporal.ZonedDateTime
-  );
 }
 
 /**

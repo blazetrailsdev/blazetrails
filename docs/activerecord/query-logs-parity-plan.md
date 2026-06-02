@@ -132,17 +132,27 @@ almost always wrong; matching Rails is almost always right," so **Option A is
 the default recommendation**: it reproduces Rails' execution layout
 (`internal_execute → preprocess_query → raw_execute(log)`) faithfully.
 
-**What Option B diverges on, concretely:** Rails applies transformers inside
-`internal_execute` and logs inside `raw_execute`, so the transform attaches at
-the adapter boundary and _every_ path into `raw_execute` (including
-`execute_batch`, which calls `raw_execute` per statement) gets the comment. The
-proposed B reorder attaches the transform one level up in `internalExecQuery`,
-so any execution path that reaches `rawExecute`/`internalExecute` **without**
-going through `internalExecQuery` would silently skip the comment. Before
-choosing B, enumerate those paths and confirm none of the QueryLogs-relevant
-ones (`Dashboard.first`, `connection.execute`, `exists?`, `destroy`, `save`,
-`create`, `all.to_a` — the exact Rails test surface) are missed. If any are,
-Option A is required.
+**Where Rails actually applies the transform.** `preprocess_query` is called in
+exactly two places: `internal_execute` (`database_statements.rb:590`) and the
+async `select` path (`:678`). It is **never** called inside `raw_execute`
+(`:552-559`). Crucially, `execute_batch` (abstract `:594-598`, and concrete
+overrides like sqlite3 `database_statements.rb:126-129`) calls `raw_execute`
+**directly**, bypassing `preprocess_query` — so batch SQL carries **no**
+QueryLogs comment in Rails. The transform attaches at `internal_execute`/`select`,
+**not** at the `raw_execute` adapter boundary. Direct-`raw_execute` and
+`execute_batch` paths are intentionally **un**commented, and a faithful port
+should leave them uncommented too (don't "fix" `executeBatch` to emit comments —
+that would diverge from Rails).
+
+**What Option B diverges on, concretely:** the proposed B reorder attaches the
+transform one level up in `internalExecQuery` (vs. Rails' `internal_execute`/
+`select`), so any execution path that reaches `rawExecute`/`internalExecute`
+**without** going through `internalExecQuery` would silently skip the comment.
+Before choosing B, enumerate those paths and confirm none of the
+QueryLogs-relevant ones (`Dashboard.first`, `connection.execute`, `exists?`,
+`destroy`, `save`, `create`, `all.to_a` — the exact Rails test surface) are
+missed. If any are, Option A is required. (`executeBatch` is **not** in that set
+— Rails doesn't comment it either, so neither option needs to.)
 
 This ordering subtlety — not the `QueryLogs` class itself — is the real work
 and the reason a "just add `useHandlerFixtures`" migration is impossible.

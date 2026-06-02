@@ -1009,6 +1009,16 @@ describeIfPg("PostgreSQLAdapter", () => {
             className: "UuidPostDj",
             foreignKey: "uuid_post_id",
           });
+          this.hasOne("uuidForum", {
+            className: "UuidForumDj",
+            through: "uuidPost",
+          });
+          this.hasOne("uuidForumWithoutJoins", {
+            className: "UuidForumDj",
+            through: "uuidPost",
+            source: "uuidForum",
+            disableJoins: true,
+          });
         }
       }
       registerModel("UuidForumDj", UuidForumCls);
@@ -1027,7 +1037,6 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("uuid primary key and disable joins with delegate cache", async () => {
-      const { association } = await import("../../index.js");
       const forum = await UuidForum.createBang({});
       const post1 = await (forum as any).uuidPosts.createBang({});
       const comment11 = await (post1 as any).uuidComments.createBang({});
@@ -1037,7 +1046,8 @@ describeIfPg("PostgreSQLAdapter", () => {
       const comment22 = await (post2 as any).uuidComments.createBang({});
       const comment23 = await (post2 as any).uuidComments.createBang({});
 
-      const noJoins = await association(forum, "uuidCommentsWithoutJoins").toArray();
+      // Rails: uuid_forum.uuid_comments_without_joins.order(:id).to_a.map(&:id).sort
+      const noJoins = await (forum as any).uuidCommentsWithoutJoins.order("id").toArray();
       const actual = noJoins.map((c: any) => c.id).sort();
       const expected = [
         comment11.id,

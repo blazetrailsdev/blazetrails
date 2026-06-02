@@ -28,6 +28,13 @@ describe("LengthValidationTest", () => {
     registerModel("Pet", Pet);
   });
 
+  // `defineSchema` builds a single named PK (`owner_id` / `pet_id`) as a
+  // composite-style PK constraint, not an AUTO_INCREMENT column (only the
+  // default `id` PK auto-increments). SQLite masks this — an INTEGER PRIMARY
+  // KEY auto-fills via rowid — but MySQL/Postgres reject an INSERT that omits
+  // the PK. The persisting tests below therefore supply explicit surrogate
+  // keys; Rails' DB auto-increments them. Per-test ROLLBACK keeps id=1 free.
+
   // Rails `setup { @owner = Class.new(Owner) { def self.name; "Owner"; end } }`.
   // A fresh anonymous subclass per test so the `validates_size_of` declaration
   // does not leak across tests (Rails relies on the per-test class for this).
@@ -75,10 +82,10 @@ describe("LengthValidationTest", () => {
   it("validates size of respects records marked for destruction", async () => {
     const owner = ownerClass();
     owner.validatesSizeOf("pets", { minimum: 1 });
-    const o = new owner({});
+    const o = new owner({ owner_id: 1 }); // explicit surrogate key — see note above
     expect(await o.save()).toBe(false);
     expect(o.errors.get("pets").length).toBeGreaterThan(0);
-    const pet = association(o, "pets").build({});
+    const pet = association(o, "pets").build({ pet_id: 1 });
     expect(await o.isValid()).toBe(true);
     expect(await o.save()).toBe(true);
 
@@ -103,9 +110,17 @@ describe("LengthValidationTest", () => {
       }
     };
     registerModel("Pet", pet);
-    const p = await pet.create({ name: "Fancy Pants", nickname: "Fancy" });
-    expect(await p.isValid()).toBe(true);
-    (p as unknown as { nickname: string }).nickname = "";
-    expect(await p.isValid()).toBe(false);
+    // Mirrors Rails `repair_validations(Pet) do ... end` — restore the canonical
+    // Pet in the registry afterward so the subclass (carrying the extra
+    // validations + virtual attr) can't leak into another suite in this worker.
+    try {
+      // pet_id is an explicit surrogate key — see the note above beforeAll.
+      const p = await pet.create({ pet_id: 1, name: "Fancy Pants", nickname: "Fancy" });
+      expect(await p.isValid()).toBe(true);
+      (p as unknown as { nickname: string }).nickname = "";
+      expect(await p.isValid()).toBe(false);
+    } finally {
+      registerModel("Pet", Pet);
+    }
   });
 });

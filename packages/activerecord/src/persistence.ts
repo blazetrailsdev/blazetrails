@@ -491,16 +491,6 @@ function assertLockingColumnNotExplicitly(
 }
 
 /**
- * Mirrors: ActiveRecord::Persistence#update — assign + save. Returns the
- * boolean from save so callers can detect validation / callback aborts
- * without catching exceptions.
- *
- * Rails wraps this in `with_transaction_returning_status` so the pre-assignment
- * state snapshot is captured before any attribute writes. This ensures that on
- * rollback, composite PKs and other attributes modified by the assignment are
- * restored to their pre-update values.
- */
-/**
  * Assign one key during `#update` / `#update!`. Mirrors Rails `assign_attributes`,
  * which routes every key through `public_send("#{key}=")`. We keep the raw
  * `writeAttribute` path for plain columns (it preserves original error classes —
@@ -520,6 +510,16 @@ function assignUpdateAttribute(self: any, key: string, value: unknown): void {
   self.writeAttribute(key, value);
 }
 
+/**
+ * Mirrors: ActiveRecord::Persistence#update — assign + save. Returns the
+ * boolean from save so callers can detect validation / callback aborts
+ * without catching exceptions.
+ *
+ * Rails wraps this in `with_transaction_returning_status` so the pre-assignment
+ * state snapshot is captured before any attribute writes. This ensures that on
+ * rollback, composite PKs and other attributes modified by the assignment are
+ * restored to their pre-update values.
+ */
 export async function update<T extends UpdateRecord>(
   this: T,
   attrs: Record<string, unknown>,
@@ -532,6 +532,11 @@ export async function update<T extends UpdateRecord>(
     // every writeAttribute failure in AttributeAssignmentError — more aggressive
     // than Rails. Use a raw writeAttribute loop here to preserve original error
     // classes (pre-extraction behavior; closer to Rails than wrapping).
+    // NOTE: this leaves two assignment paths where Rails has one — plain columns
+    // go through raw writeAttribute (above), only nested-attribute writers route
+    // through their setter (assignUpdateAttribute). A column with a custom writer
+    // would be missed; none exist today. TODO: unify on `public_send`-equivalent
+    // setter dispatch if/when a custom column writer is introduced.
     for (const [key, value] of Object.entries(attrs)) {
       assignUpdateAttribute(self, key, value);
     }

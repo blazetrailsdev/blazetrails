@@ -30,6 +30,10 @@ export class Configurable {
     return (Contexts.context.cipher as Cipher | undefined) ?? (_defaultCipher ??= new Cipher());
   }
 
+  static get encryptor(): unknown {
+    return Contexts.context.encryptor;
+  }
+
   static configure(options: {
     primaryKey?: string | string[];
     deterministicKey?: string;

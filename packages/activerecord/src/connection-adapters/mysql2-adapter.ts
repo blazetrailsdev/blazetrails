@@ -573,10 +573,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     if (this._isFakeConnection) throw new Error("Mysql2Adapter: fake connection has no client");
     const gen = this._connectGeneration;
     this._connectingPromiseGen = gen;
-    this._connectingPromise = Mysql2Adapter._createClient(
-      this._poolConfig,
-      this._buildInitSql(),
-    ).then(
+    this._connectingPromise = Mysql2Adapter.newClient(this._poolConfig, this._buildInitSql()).then(
       (conn): mysql.Connection | Promise<mysql.Connection> => {
         if (this._connectGeneration !== gen) {
           // disconnectBang()/close() happened while we were connecting. Clear
@@ -1640,9 +1637,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * init SQL on it. Strips pool-only options (`connectionLimit`,
    * `queueLimit`, `waitForConnections`) that have no meaning on a
    * single-connection handle.
-   * @internal
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::Mysql2Adapter.new_client
    */
-  static async _createClient(
+  static async newClient(
     config: mysql.PoolOptions & MysqlAdapterOptions,
     initSql: string,
   ): Promise<mysql.Connection> {

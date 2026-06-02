@@ -939,9 +939,114 @@ describeIfPg("PostgreSQLAdapter", () => {
   });
 
   describe("PostgreSQLUUIDHasManyThroughDisableJoinsTest", () => {
-    it.skip("uuid primary key and disable joins with delegate cache", () => {
-      // BLOCKED: associations — hasManyThrough + disableJoins not implemented (not uuid-specific).
-      // Separate PR effort; uuid PK emission verified by Slot A schema-dump tests above.
+    let UuidForum: any;
+
+    beforeEach(async () => {
+      await adapter.exec(`DROP TABLE IF EXISTS pg_uuid_dj_comments`);
+      await adapter.exec(`DROP TABLE IF EXISTS pg_uuid_dj_posts`);
+      await adapter.exec(`DROP TABLE IF EXISTS pg_uuid_dj_forums`);
+      await adapter.exec(`
+        CREATE TABLE pg_uuid_dj_forums (
+          id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+          name text
+        )
+      `);
+      await adapter.exec(`
+        CREATE TABLE pg_uuid_dj_posts (
+          id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+          uuid_forum_id uuid REFERENCES pg_uuid_dj_forums(id),
+          title text
+        )
+      `);
+      await adapter.exec(`
+        CREATE TABLE pg_uuid_dj_comments (
+          id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+          uuid_post_id uuid REFERENCES pg_uuid_dj_posts(id),
+          content text
+        )
+      `);
+      const { registerModel } = await import("../../index.js");
+      class UuidForumCls extends Base {
+        static tableName = "pg_uuid_dj_forums";
+        static {
+          // Rails: has_many :uuid_posts, -> { order("title DESC") } — the
+          // ordering scope exercises the delegate-cache path the test name calls out.
+          this.hasMany("uuidPosts", {
+            className: "UuidPostDj",
+            foreignKey: "uuid_forum_id",
+            scope: (rel: any) => rel.order("title DESC"),
+          });
+          this.hasMany("uuidComments", {
+            className: "UuidCommentDj",
+            through: "uuidPosts",
+            source: "uuidComments",
+          });
+          this.hasMany("uuidCommentsWithoutJoins", {
+            className: "UuidCommentDj",
+            through: "uuidPosts",
+            source: "uuidComments",
+            disableJoins: true,
+          });
+        }
+      }
+      class UuidPostCls extends Base {
+        static tableName = "pg_uuid_dj_posts";
+        static {
+          this.belongsTo("uuidForum", {
+            className: "UuidForumDj",
+            foreignKey: "uuid_forum_id",
+          });
+          this.hasMany("uuidComments", {
+            className: "UuidCommentDj",
+            foreignKey: "uuid_post_id",
+          });
+        }
+      }
+      class UuidCommentCls extends Base {
+        static tableName = "pg_uuid_dj_comments";
+        static {
+          this.belongsTo("uuidPost", {
+            className: "UuidPostDj",
+            foreignKey: "uuid_post_id",
+          });
+        }
+      }
+      registerModel("UuidForumDj", UuidForumCls);
+      registerModel("UuidPostDj", UuidPostCls);
+      registerModel("UuidCommentDj", UuidCommentCls);
+      await UuidForumCls.loadSchema();
+      await UuidPostCls.loadSchema();
+      await UuidCommentCls.loadSchema();
+      UuidForum = UuidForumCls;
+    });
+
+    afterEach(async () => {
+      await adapter.exec(`DROP TABLE IF EXISTS pg_uuid_dj_comments`);
+      await adapter.exec(`DROP TABLE IF EXISTS pg_uuid_dj_posts`);
+      await adapter.exec(`DROP TABLE IF EXISTS pg_uuid_dj_forums`);
+    });
+
+    it("uuid primary key and disable joins with delegate cache", async () => {
+      const { association } = await import("../../index.js");
+      const forum = await UuidForum.createBang({});
+      const post1 = await (forum as any).uuidPosts.createBang({});
+      const comment11 = await (post1 as any).uuidComments.createBang({});
+      const comment12 = await (post1 as any).uuidComments.createBang({});
+      const post2 = await (forum as any).uuidPosts.createBang({});
+      const comment21 = await (post2 as any).uuidComments.createBang({});
+      const comment22 = await (post2 as any).uuidComments.createBang({});
+      const comment23 = await (post2 as any).uuidComments.createBang({});
+
+      const noJoins = await association(forum, "uuidCommentsWithoutJoins").toArray();
+      const actual = noJoins.map((c: any) => c.id).sort();
+      const expected = [
+        comment11.id,
+        comment12.id,
+        comment21.id,
+        comment22.id,
+        comment23.id,
+      ].sort();
+      expect(actual).toEqual(expected);
     });
   });
 });

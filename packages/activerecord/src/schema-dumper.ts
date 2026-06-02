@@ -215,13 +215,22 @@ const DSL_HELPER_METHODS = new Set([
  * dsl type names `sqlTypeToDsl` may resolve to that must round-trip to
  * themselves when they re-appear as a bare SQL type — e.g. a SchemaDumper
  * second pass, or CTAS where SQLite preserves the dumped DSL name as the
- * column's declared type. Without this safety net such a type falls through
- * to the `enum` catch-all and is mis-emitted as `t.enum(...)`.
+ * column's declared type. Without this safety net such a name falls through
+ * to the `{ dslType: "enum" }` catch-all; since these columns are not
+ * `isEnum`, the emitter then routes them through the generic
+ * `t.column(name, sqlType)` path (`t.enum(...)` is only emitted when
+ * `col.isEnum`), silently losing the matching DSL helper.
  *
  * Derived from `DSL_HELPER_METHODS` (so every helper is covered by
  * construction) plus the non-helper dsl types `sqlTypeToDsl`/`SQL_TYPE_MAP`
  * also produce (`timestamptz`, `uuid`, `interval`, `oid`, `serial`,
  * `bigserial`, `char`).
+ *
+ * Caveat (consistent with `SQL_TYPE_MAP`'s existing behavior): a PG enum
+ * type whose name collides with one of these (e.g. an enum literally named
+ * `point` or `bitvarying`) resolves to the helper rather than `t.enum`.
+ * Every `SQL_TYPE_MAP` key already carries this collision; this set only
+ * adds `bitvarying` to it.
  */
 const KNOWN_DSL_TYPES = new Set<string>([
   ...DSL_HELPER_METHODS,

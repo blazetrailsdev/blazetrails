@@ -455,7 +455,11 @@ describe("SchemaDumperTest", () => {
         { name: "n2", type: "cidr" },
         { name: "n3", type: "macaddr" },
         // camelCase dsl name re-fed as a SQL type — previously fell through to
-        // the `enum` catch-all; must now resolve back to the bitVarying helper.
+        // the `enum` catch-all and was emitted via the generic
+        // `t.column("bv", "bitvarying")` path; must now resolve back to the
+        // bitVarying helper. This `bv` row is the one assertion that actually
+        // pins this PR's behavioral change — the range/network types below are
+        // SQL_TYPE_MAP keys and emit helpers before and after this change.
         { name: "bv", type: "bitVarying" },
       ],
       indexes: () => [],
@@ -475,6 +479,9 @@ describe("SchemaDumperTest", () => {
     ]) {
       expect(output).toContain(`t.${helper}(`);
     }
+    // The fix specifically: `bv` must NOT take the generic column fallback.
+    expect(output).toContain('t.bitVarying("bv")');
+    expect(output).not.toContain('t.column("bv"');
     expect(output).not.toContain("t.enum(");
     expect(output).not.toContain('"enum"');
   });
@@ -493,9 +500,11 @@ describe("SchemaDumperTest", () => {
       indexes: () => [],
     };
     const output = TopLevelDumper.dump(source) as string;
-    // These have no TableDefinition helper, so they round-trip through the
-    // generic `t.column(name, sqlType)` path — but must keep their own type
-    // name rather than collapsing to the `enum` fallback.
+    // Regression guard for pre-existing behavior (these are all SQL_TYPE_MAP
+    // keys, unaffected by this PR's fallback change): they have no
+    // TableDefinition helper, so they round-trip through the generic
+    // `t.column(name, sqlType)` path — keeping their own type name rather than
+    // collapsing to the `enum` fallback.
     expect(output).toContain('t.column("ts", "timestamptz"');
     expect(output).toContain('t.column("guid", "uuid"');
     expect(output).toContain('t.column("span", "interval"');

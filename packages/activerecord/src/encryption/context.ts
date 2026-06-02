@@ -84,8 +84,12 @@ function currentContext(): EncryptionContext {
 }
 
 export function withEncryptionContext<T>(overrides: EncryptionContext, fn: () => T): T {
-  const previous = currentContext();
-  contextStack.push({ ...previous, ...overrides });
+  // Mirrors Rails Contexts#with_encryption_context (contexts.rb:32-42): every frame
+  // is `default_context.dup` + the overrides — NOT a copy of the enclosing custom
+  // context. So nested contexts reset every unspecified property to the default
+  // (e.g. without_encryption nested inside protecting_encrypted_data resets
+  // frozen_encryption to false), rather than inheriting it from the outer frame.
+  contextStack.push({ ...getDefaultContext(), ...overrides });
   let result: T;
   try {
     result = fn();

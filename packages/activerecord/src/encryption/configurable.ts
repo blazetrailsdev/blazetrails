@@ -1,6 +1,7 @@
 import { Config } from "./config.js";
 import { Contexts } from "./contexts.js";
 import { Cipher } from "./cipher.js";
+import type { EncryptorLike } from "./encryptor.js";
 
 let _sharedConfig: Config | null = null;
 let _defaultCipher: Cipher | null = null;
@@ -30,8 +31,8 @@ export class Configurable {
     return (Contexts.context.cipher as Cipher | undefined) ?? (_defaultCipher ??= new Cipher());
   }
 
-  static get encryptor(): unknown {
-    return Contexts.context.encryptor;
+  static get encryptor(): EncryptorLike | undefined {
+    return Contexts.context.encryptor as EncryptorLike | undefined;
   }
 
   static configure(options: {

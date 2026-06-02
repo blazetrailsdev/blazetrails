@@ -65,8 +65,13 @@ def call(sql, connection)
 end
 
 def comment(connection)
+  comment = uncached_or_cached_comment(connection)   # threads connection down
+  ...
+end
+
+def tag_content(connection)                       # ← connection injected HERE
   context = ActiveSupport::ExecutionContext.to_h
-  context[:connection] ||= connection            # ← the two skipped tests need this
+  context[:connection] ||= connection             # ← the two skipped tests need this
   ...
 end
 
@@ -123,7 +128,9 @@ sibling branches off `main` with non-overlapping files, merged sequentially.
   (mirrors `ActiveRecord.query_transformers`) with a typed
   `QueryTransformer = { call(sql: string, connection: unknown): string }`.
 - Extend `QueryLogs.call` to the Rails 2-arg shape `call(sql, connection?)`;
-  inject `context.connection ||= connection` in `comment()` so the two
+  thread `connection` through `comment()` → `tagContent()` and inject
+  `context.connection ||= connection` in **`tagContent()`** (mirroring Rails'
+  `tag_content(connection)`, query_logs.rb) so the two
   currently-skipped tests (`connection is passed to tagging proc`,
   `connection does not override already existing connection in context`)
   have their dependency satisfied. Keep `call(sql)` working (connection

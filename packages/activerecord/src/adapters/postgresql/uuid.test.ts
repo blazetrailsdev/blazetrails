@@ -9,7 +9,7 @@ import { SchemaStatements } from "../../connection-adapters/abstract/schema-stat
 import { RecordNotFound } from "../../errors.js";
 import { defineSchema } from "../../test-helpers/define-schema.js";
 import { setupHandlerSuite } from "../../test-helpers/setup-handler-suite.js";
-import { Base } from "../../index.js";
+import { Base, registerModel } from "../../index.js";
 
 beforeAll(() => {
   vi.stubEnv("AR_NO_AUTO_SCHEMA", "1");
@@ -965,7 +965,6 @@ describeIfPg("PostgreSQLAdapter", () => {
           content text
         )
       `);
-      const { registerModel } = await import("../../index.js");
       class UuidForumCls extends Base {
         static tableName = "pg_uuid_dj_forums";
         static {

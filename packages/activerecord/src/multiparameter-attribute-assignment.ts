@@ -177,7 +177,15 @@ function buildDate(year: number, month: number, day: number): Temporal.PlainDate
   try {
     return Temporal.PlainDate.from({ year, month, day }, { overflow: "reject" });
   } catch {
-    throw new Error(`Invalid date: ${year}-${month}-${day}`);
+    // Rails' `read_date` rescues an invalid `Date.new(*set_values)` and falls
+    // back to `instantiate_time_object(set_values).to_date` — i.e. it lets the
+    // overflowing components roll over the way `Time.local` does (Nov 31 → Dec 1,
+    // Feb 29 in a common year → Mar 1) rather than raising. Reproduce that by
+    // balancing the excess months/days onto Jan 1 of the year.
+    return Temporal.PlainDate.from({ year, month: 1, day: 1 }).add({
+      months: month - 1,
+      days: day - 1,
+    });
   }
 }
 

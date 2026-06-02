@@ -500,6 +500,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     binds?: unknown[],
     options?: { prepare?: boolean },
   ): Promise<Result> {
+    sql = this.preprocessQuery(sql);
     await this.materializeTransactions();
     this._syncDatabaseTimezone();
     const driverSql = this.mysqlQuote(sql);
@@ -675,6 +676,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     binds: unknown[] = [],
     name: string = "SQL",
   ): Promise<Record<string, unknown>[]> {
+    sql = this.preprocessQuery(sql);
     await this.materializeTransactions();
     this._syncDatabaseTimezone();
     const driverSql = this.mysqlQuote(sql);
@@ -731,6 +733,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * Wrapped in a `sql.active_record` notification — see `execute`.
    */
   async executeMutation(sql: string, binds: unknown[] = [], name: string = "SQL"): Promise<number> {
+    sql = this.preprocessQuery(sql);
     await this.materializeTransactions();
     this._syncDatabaseTimezone();
     const driverSql = this.mysqlQuote(sql);

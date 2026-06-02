@@ -718,6 +718,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     binds?: unknown[],
     options?: { prepare?: boolean },
   ): Promise<Result> {
+    sql = this.preprocessQuery(sql);
     // Note: we do NOT call materializeTransactions() here. If a lazy tx
     // is pending but un-materialized, a SELECT against an ad-hoc pool
     // client sees pre-tx state — which is correct read-before-write
@@ -1288,7 +1289,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     binds: unknown[] = [],
     name: string = "SQL",
   ): Promise<Record<string, unknown>[]> {
-    this.checkIfWriteQuery(sql);
+    sql = this.preprocessQuery(sql);
     await this.materializeTransactions();
     binds = binds.map((v) => this._bindForPg(v));
     const rewritten = this.rewriteBinds(sql, binds);
@@ -1331,7 +1332,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * `rowCount` is returned.
    */
   async executeMutation(sql: string, binds: unknown[] = [], name: string = "SQL"): Promise<number> {
-    this.checkIfWriteQuery(sql);
+    sql = this.preprocessQuery(sql);
     await this.materializeTransactions();
     binds = binds.map((v) => this._bindForPg(v));
     const pgSql = this.rewriteBinds(sql, binds);
@@ -1909,7 +1910,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         const cols = returning.map((c) => this.quoteColumnName(c)).join(", ");
         sql = `${sql} RETURNING ${cols}`;
       }
-      this.checkIfWriteQuery(sql);
+      sql = this.preprocessQuery(sql);
       await this.materializeTransactions();
       return this.withClient(async (client) => {
         this.dirtyCurrentTransaction();
@@ -1931,7 +1932,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         sequenceName = resolvedPk ? await this.defaultSequenceName(tableRef, resolvedPk) : null;
       }
     }
-    this.checkIfWriteQuery(sql);
+    sql = this.preprocessQuery(sql);
     await this.materializeTransactions();
     // currval() is session-scoped: INSERT and SELECT currval(...) must
     // run on the same connection. withClient() pins both to one client.
